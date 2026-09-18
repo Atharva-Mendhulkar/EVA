@@ -1,0 +1,158 @@
+{
+  "Comment": "NEXUS Core Administrative Workflow Execution Machine (PRD Section 14.2)",
+  "StartAt": "RetrieveVaultDocuments",
+  "States": {
+    "RetrieveVaultDocuments": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-vault-retriever",
+      "Next": "ExtractEvidenceBedrock"
+    },
+    "ExtractEvidenceBedrock": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-bedrock-extractor",
+      "Next": "DetectConflicts"
+    },
+    "DetectConflicts": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-conflict-detector",
+      "Next": "EvaluateConflictCondition"
+    },
+    "EvaluateConflictCondition": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.hasCriticalConflict",
+          "BooleanEquals": true,
+          "Next": "WaitForUserConflictResolution"
+        }
+      ],
+      "Default": "AuthorizePopulate"
+    },
+    "WaitForUserConflictResolution": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "TimeoutSeconds": 86400,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:nexus-token-registrar",
+        "Payload": {
+          "step": "CONFLICT_RESOLUTION",
+          "taskToken.$": "$$.Task.Token",
+          "workflowRunId.$": "$.workflowRunId"
+        }
+      },
+      "Next": "ApplyConflictResolution"
+    },
+    "ApplyConflictResolution": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-apply-resolution",
+      "Next": "AuthorizePopulate"
+    },
+    "AuthorizePopulate": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-cedar-evaluator",
+      "Parameters": {
+        "action": "Action::\"populate_form\"",
+        "principal": "NexusAgent::\"form_execution\"",
+        "resource": "Form::\"internship_onboarding\"",
+        "context": {
+          "conflict_resolved": true,
+          "evidence_confidence.$": "$.minConfidence",
+          "human_approved": false,
+          "workflow_scope": "internship"
+        }
+      },
+      "Next": "CheckPopulateAuthorization"
+    },
+    "CheckPopulateAuthorization": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.decision",
+          "StringEquals": "ALLOW",
+          "Next": "ExecuteFormPopulation"
+        }
+      ],
+      "Default": "WorkflowHaltedPolicyDenied"
+    },
+    "ExecuteFormPopulation": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-form-populator",
+      "Next": "AuthorizeSubmitPreApproval"
+    },
+    "AuthorizeSubmitPreApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-cedar-evaluator",
+      "Parameters": {
+        "action": "Action::\"submit_form\"",
+        "principal": "NexusAgent::\"form_execution\"",
+        "resource": "Form::\"internship_onboarding\"",
+        "context": {
+          "conflict_resolved": true,
+          "evidence_confidence.$": "$.minConfidence",
+          "human_approved": false,
+          "workflow_scope": "internship"
+        }
+      },
+      "Next": "WaitForHumanApproval"
+    },
+    "WaitForHumanApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "TimeoutSeconds": 86400,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:nexus-token-registrar",
+        "Payload": {
+          "step": "HUMAN_APPROVAL",
+          "taskToken.$": "$$.Task.Token",
+          "workflowRunId.$": "$.workflowRunId"
+        }
+      },
+      "Next": "AuthorizeSubmitPostApproval"
+    },
+    "AuthorizeSubmitPostApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-cedar-evaluator",
+      "Parameters": {
+        "action": "Action::\"submit_form\"",
+        "principal": "NexusAgent::\"form_execution\"",
+        "resource": "Form::\"internship_onboarding\"",
+        "context": {
+          "conflict_resolved": true,
+          "evidence_confidence.$": "$.minConfidence",
+          "human_approved": true,
+          "workflow_scope": "internship"
+        }
+      },
+      "Next": "CheckSubmitAuthorization"
+    },
+    "CheckSubmitAuthorization": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.decision",
+          "StringEquals": "ALLOW",
+          "Next": "ExecuteFormSubmission"
+        }
+      ],
+      "Default": "WorkflowHaltedPolicyDenied"
+    },
+    "ExecuteFormSubmission": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-form-submitter",
+      "Next": "WriteFinalAuditAndComplete"
+    },
+    "WriteFinalAuditAndComplete": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-audit-writer",
+      "Next": "WorkflowCompleted"
+    },
+    "WorkflowCompleted": {
+      "Type": "Succeed"
+    },
+    "WorkflowHaltedPolicyDenied": {
+      "Type": "Fail",
+      "Cause": "Cedar Policy Evaluation DENIED the action.",
+      "Error": "PolicyDenied"
+    }
+  }
+}
