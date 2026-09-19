@@ -13,6 +13,7 @@ import {
   domainRegistry
 } from '../lib/agents';
 import { getSeedEvidence } from '../lib/engine/fixtures';
+import { populateFormFields, submitPopulatedForm } from '../lib/playwright/executor';
 
 describe('EVA 4-Agent Architecture (PRD Section 5)', () => {
   describe('1. EVA Orchestrator', () => {
@@ -231,4 +232,64 @@ describe('EVA 4-Agent Architecture (PRD Section 5)', () => {
       expect(rec.options[0].title).toContain('Government Civic Clearance');
     });
   });
+
+  describe('7. Playwright Execution Agent (PRD Section 10)', () => {
+    it('populates form fields and computes deterministic formStateHash', () => {
+      const fields = [
+        {
+          fieldId: 'f1',
+          canonicalField: 'full_name' as const,
+          label: 'Full Name',
+          value: 'Atharva Mendhulkar',
+          sourceDocument: 'Profile.pdf',
+          sourceLocation: 'Page 1',
+          confidence: 0.98,
+          evidenceId: 'ev_1',
+          status: 'verified' as const
+        },
+        {
+          fieldId: 'f2',
+          canonicalField: 'work_location' as const,
+          label: 'Work Location',
+          value: 'Bangalore',
+          sourceDocument: 'Offer.pdf',
+          sourceLocation: 'Page 1',
+          confidence: 0.99,
+          evidenceId: 'ev_2',
+          status: 'verified' as const
+        }
+      ];
+      const result = populateFormFields('internship_onboarding', fields);
+      expect(result.formId).toBe('internship_onboarding');
+      expect(result.fieldsPopulated).toBe(2);
+      expect(result.formStateHash).toHaveLength(64);
+    });
+
+    it('emits verified submission receipt when receipt is parsed', () => {
+      const receipt = submitPopulatedForm(
+        'internship_onboarding',
+        'https://mock-company-portal.internal/onboard',
+        6,
+        true
+      );
+      expect(receipt.statusCode).toBe(200);
+      expect(receipt.receiptId).toMatch(/^rcpt_/);
+      expect(receipt.fieldsSubmitted).toBe(6);
+      expect(receipt.message).toContain('Authorization boundary verified');
+    });
+
+    it('enforces unknown-submission guard forbidding retries when no receipt parsed', () => {
+      const receipt = submitPopulatedForm(
+        'internship_onboarding',
+        'https://mock-company-portal.internal/onboard',
+        6,
+        false
+      );
+      expect(receipt.statusCode).toBe(0);
+      expect(receipt.receiptId).toMatch(/^unknown_/);
+      expect(receipt.message).toContain('SUBMISSION_STATUS_UNKNOWN: no receipt parsed. Automated retries forbidden.');
+      expect(receipt.fieldsSubmitted).toBe(0);
+    });
+  });
 });
+

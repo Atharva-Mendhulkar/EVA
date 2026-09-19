@@ -184,7 +184,7 @@ export function ConflictModal({ conflict, onResolve, onClose }: ConflictModalPro
             <span className="text-zinc-300">STATUS: HALTED</span>
           </div>
           <div className="text-[11px] font-mono text-zinc-400">
-            Field: work_location · Source A (&apos;mumbai&apos;) ≠ Source B (&apos;bangalore&apos;)
+            Field: {formatFieldLabel(conflict.field)} · Source A (&apos;{candidateA?.value || 'null'}&apos;) ≠ Source B (&apos;{candidateB?.value || 'null'}&apos;)
           </div>
         </div>
 
@@ -196,13 +196,13 @@ export function ConflictModal({ conflict, onResolve, onClose }: ConflictModalPro
               className="text-zinc-500 hover:text-zinc-300 transition text-[11px] font-mono"
               type="button"
             >
-              + Enter custom location value
+              + Enter custom {formatFieldLabel(conflict.field).toLowerCase()} value
             </button>
           ) : (
             <div className="flex items-center gap-2 w-full">
               <input
                 type="text"
-                placeholder="Enter custom location..."
+                placeholder={`Enter custom ${formatFieldLabel(conflict.field).toLowerCase()}...`}
                 value={overrideText}
                 onChange={(e) => setOverrideText(e.target.value)}
                 className="input-minimal flex-1"

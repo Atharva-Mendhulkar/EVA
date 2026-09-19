@@ -31,6 +31,7 @@ import { EvidenceDrawer } from '@/components/EvidenceDrawer';
 import { AppSidebar } from '@/components/AppSidebar';
 import { FeaturesModal } from '@/components/FeaturesModal';
 import { DocumentUploadModal } from '@/components/DocumentUploadModal';
+import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { Evidence, WorkflowRun } from '@/lib/engine/types';
 import { TEMPLATES } from '@/lib/engine/fixtures';
 import { apiFetch } from '@/lib/session/client';
@@ -852,7 +853,7 @@ export default function Page() {
                         </div>
 
                         <div className="eva-response-body">
-                          {workflow.agentResponse}
+                          <MarkdownRenderer content={workflow.agentResponse} />
                         </div>
 
                         {/* Interactive Suggestion Chips */}
@@ -884,6 +885,10 @@ export default function Page() {
                         isExecuting={isLoading}
                         plan={workflow?.plan}
                         stepIndex={workflow?.stepIndex}
+                        evidence={workflow?.evidence}
+                        conflicts={workflow?.conflicts}
+                        template={workflow?.template}
+                        targetSystem={workflow?.targetSystem}
                       />
                     )}
 

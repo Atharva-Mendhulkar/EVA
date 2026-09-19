@@ -523,7 +523,6 @@ export function getSeedEvidence(workflowRunId: string, templateId: string = 'int
       ];
 
     case 'internship_onboarding':
-    default:
       return [
         {
           evidenceId: `ev_prof_name_${workflowRunId}`,
@@ -617,6 +616,9 @@ export function getSeedEvidence(workflowRunId: string, templateId: string = 'int
           confidence: 0.95
         }
       ];
+
+    default:
+      return [];
   }
 }
 

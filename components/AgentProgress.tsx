@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
-import { WorkflowStatus, WorkflowStep } from '@/lib/engine/types';
+import { WorkflowStatus, WorkflowStep, Evidence, Conflict } from '@/lib/engine/types';
 
 interface AgentProgressProps {
   status: WorkflowStatus;
@@ -24,17 +24,21 @@ interface AgentProgressProps {
   isExecuting?: boolean;
   plan?: WorkflowStep[];
   stepIndex?: number;
+  evidence?: Evidence[];
+  conflicts?: Conflict[];
+  template?: string;
+  targetSystem?: string;
 }
 
 const DEFAULT_8_PHASES: { stepId: number; name: string; actor: string; defaultDetail: string }[] = [
-  { stepId: 1, name: 'Intent Classification', actor: 'Strands + Bedrock', defaultDetail: 'Matched template: internship_onboarding' },
-  { stepId: 2, name: 'Vault Document Search', actor: 'S3 KMS + DynamoDB', defaultDetail: 'Retrieved 3 encrypted documents' },
-  { stepId: 3, name: 'Bedrock Evidence Extraction', actor: 'Claude 3.5 Sonnet', defaultDetail: 'Extracted 6 canonical fields with citations' },
-  { stepId: 4, name: 'Deterministic Reconciliation', actor: 'Comparator', defaultDetail: 'Normalized synonym analysis (blr → bangalore)' },
+  { stepId: 1, name: 'Intent Classification', actor: 'Strands + Bedrock', defaultDetail: 'Classified intent & matched operational domain' },
+  { stepId: 2, name: 'Vault Document Search', actor: 'S3 KMS + DynamoDB', defaultDetail: 'Retrieved encrypted documents from vault' },
+  { stepId: 3, name: 'Bedrock Evidence Extraction', actor: 'Claude 3.5 Sonnet', defaultDetail: 'Extracted canonical fields with cryptographic citations' },
+  { stepId: 4, name: 'Deterministic Reconciliation', actor: 'Comparator', defaultDetail: 'Deterministic comparator & reconciliation' },
   { stepId: 5, name: 'Cedar Authorization (Populate)', actor: 'Cedar Engine', defaultDetail: 'Action::populate_form policy evaluation' },
-  { stepId: 6, name: 'Sandboxed Form Population', actor: 'Mock HR Sandbox', defaultDetail: 'Populated 6 fields with provenance tags' },
+  { stepId: 6, name: 'Sandboxed Form Population', actor: 'Sandbox Engine', defaultDetail: 'Populated canonical fields with provenance tags' },
   { stepId: 7, name: 'Cedar Authorization (Submit)', actor: 'Step Functions', defaultDetail: 'Action::submit_form human approval gate' },
-  { stepId: 8, name: 'Consequential External Submission', actor: 'Mock HR Endpoint', defaultDetail: 'Dispatched to sandbox & recorded in audit trail' }
+  { stepId: 8, name: 'Consequential External Submission', actor: 'Target Endpoint', defaultDetail: 'Dispatched to operational target & recorded in audit trail' }
 ];
 
 export function AgentProgress({
@@ -44,7 +48,11 @@ export function AgentProgress({
   fieldsCount,
   isExecuting,
   plan,
-  stepIndex
+  stepIndex,
+  evidence,
+  conflicts,
+  template,
+  targetSystem
 }: AgentProgressProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'phases' | 'trace'>('phases');
@@ -52,6 +60,23 @@ export function AgentProgress({
   const isCompleted = status === 'COMPLETED';
   const isAwaitingApproval = status === 'AWAITING_HUMAN_APPROVAL';
   const isConflict = hasOpenConflict || status === 'AWAITING_USER_RESOLUTION';
+
+  const activeConflict = conflicts?.find((c) => c.status === 'open');
+
+  // Group evidence by document for dynamic trace
+  const evidenceDocs = React.useMemo(() => {
+    if (!evidence || evidence.length === 0) return [];
+    const map = new Map<string, string[]>();
+    for (const ev of evidence) {
+      const docName = ev.sourceDocumentName || 'Document';
+      const list = map.get(docName) || [];
+      if (!list.includes(ev.field)) {
+        list.push(ev.field);
+      }
+      map.set(docName, list);
+    }
+    return Array.from(map.entries());
+  }, [evidence]);
 
   // Determine current active phase number (1 to 8)
   const currentPhaseNumber = isCompleted
@@ -167,7 +192,25 @@ export function AgentProgress({
                     stepStatus = 'PENDING';
                   }
 
-                  const detailText = planStep?.detail || phaseDef.defaultDetail;
+                  let detailText = planStep?.detail || phaseDef.defaultDetail;
+                  if (!planStep?.detail) {
+                    if (phaseDef.stepId === 1 && template) {
+                      detailText = `Matched template: ${template}`;
+                    } else if (phaseDef.stepId === 2 && evidence) {
+                      const docCount = evidenceDocs.length;
+                      detailText = docCount > 0 ? `Retrieved ${docCount} encrypted documents from vault` : 'Direct dispatch (no documents required)';
+                    } else if (phaseDef.stepId === 3 && evidence) {
+                      detailText = evidence.length > 0 ? `Extracted ${evidence.length} canonical fields with citations` : 'Direct administrative dispatch';
+                    } else if (phaseDef.stepId === 4) {
+                      detailText = activeConflict
+                        ? `Contradiction detected: ${activeConflict.field.replace(/_/g, ' ')} (${activeConflict.candidateEvidence[0]?.value || ''} vs ${activeConflict.candidateEvidence[1]?.value || ''})`
+                        : 'All evidence reconciled deterministically';
+                    } else if (phaseDef.stepId === 6 && fieldsCount) {
+                      detailText = `Populated ${fieldsCount} fields with provenance tags`;
+                    } else if (phaseDef.stepId === 8 && targetSystem) {
+                      detailText = `Dispatched to ${targetSystem} & recorded in audit trail`;
+                    }
+                  }
 
                   return (
                     <div
@@ -230,23 +273,23 @@ export function AgentProgress({
                     <Globe className="w-3.5 h-3.5 text-zinc-400" />
                     <span>Searching Encrypted Document Vault (S3 KMS)</span>
                   </div>
-                  <ul className="thinking-sublist flex flex-col gap-1.5">
-                    <li className="thinking-subitem flex items-center gap-2 p-2 rounded bg-zinc-900/60 border border-zinc-800 text-xs">
-                      <FileText className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="font-mono text-zinc-300">personal_profile.pdf</span>
-                      <span className="text-zinc-500 text-[11px] ml-auto">Name, University, Mumbai</span>
-                    </li>
-                    <li className="thinking-subitem flex items-center gap-2 p-2 rounded bg-zinc-900/60 border border-zinc-800 text-xs">
-                      <FileText className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="font-mono text-zinc-300">offer_letter_acme.pdf</span>
-                      <span className="text-zinc-500 text-[11px] ml-auto">Acme Corp, Bangalore</span>
-                    </li>
-                    <li className="thinking-subitem flex items-center gap-2 p-2 rounded bg-zinc-900/60 border border-zinc-800 text-xs">
-                      <FileText className="w-3.5 h-3.5 text-zinc-500" />
-                      <span className="font-mono text-zinc-300">college_noc.pdf</span>
-                      <span className="text-zinc-500 text-[11px] ml-auto">MIT Pune, Verified</span>
-                    </li>
-                  </ul>
+                  {evidenceDocs.length > 0 ? (
+                    <ul className="thinking-sublist flex flex-col gap-1.5">
+                      {evidenceDocs.map(([docName, docFields]) => (
+                        <li key={docName} className="thinking-subitem flex items-center gap-2 p-2 rounded bg-zinc-900/60 border border-zinc-800 text-xs">
+                          <FileText className="w-3.5 h-3.5 text-zinc-500 flex-none" />
+                          <span className="font-mono text-zinc-300 truncate">{docName}</span>
+                          <span className="text-zinc-500 text-[11px] ml-auto truncate max-w-[200px]">
+                            {docFields.slice(0, 3).map((f) => f.replace(/_/g, ' ')).join(', ')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="p-2.5 rounded bg-zinc-900/60 border border-zinc-800 text-xs font-mono text-zinc-500">
+                      Direct administrative operation: no external vault documents indexed.
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. Deterministic Comparator */}
@@ -256,15 +299,21 @@ export function AgentProgress({
                     <span>Deterministic Evidence Reconciliation</span>
                   </div>
                   <div className="thinking-detail-box p-2.5 rounded bg-zinc-900/60 border border-zinc-800 text-xs font-mono">
-                    {isConflict ? (
+                    {activeConflict ? (
                       <div className="flex items-center gap-2 text-zinc-300">
-                        <AlertTriangle className="w-3.5 h-3.5 text-zinc-400 flex-none" />
-                        <span>Conflict detected: work_location differs across documents (Mumbai vs Bangalore)</span>
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-none" />
+                        <span>
+                          Conflict detected: {activeConflict.field.replace(/_/g, ' ')} differs across documents ({activeConflict.candidateEvidence[0]?.value} vs {activeConflict.candidateEvidence[1]?.value})
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-zinc-300">
                         <CheckCircle2 className="w-3.5 h-3.5 text-zinc-200 flex-none" />
-                        <span>Location reconciled. Synonym comparator passed (blr → bangalore).</span>
+                        <span>
+                          {conflicts && conflicts.some(c => c.status === 'resolved')
+                            ? 'Contradiction resolved by user. Synonym comparator verified.'
+                            : 'All evidence reconciled deterministically. Zero contradictions detected.'}
+                        </span>
                       </div>
                     )}
                   </div>

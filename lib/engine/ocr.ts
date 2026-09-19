@@ -42,7 +42,7 @@ export function extractTextFromBuffer(buffer: Buffer, filename: string, mimeType
     while ((match = streamRegex.exec(raw)) !== null) {
       const streamContent = match[1];
       // Clean readable ASCII sequences
-      const readable = streamContent.replace(/[^\x20-\x7E\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
+      const readable = streamContent.replace(/[^\x20-\x7E\r\n]/g, ' ').replace(/[^\S\r\n]+/g, ' ').trim();
       if (readable.length > 20) {
         textChunks.push(readable);
       }
@@ -55,8 +55,8 @@ export function extractTextFromBuffer(buffer: Buffer, filename: string, mimeType
 
   // Fallback / plain text / markdown / image OCR simulation
   const rawUtf8 = buffer.toString('utf-8');
-  // Strip non-printable control characters
-  return rawUtf8.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Strip non-printable control characters while preserving newlines
+  return rawUtf8.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ').replace(/[^\S\r\n]+/g, ' ').trim();
 }
 
 /**

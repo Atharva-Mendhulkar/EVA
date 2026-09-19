@@ -150,7 +150,7 @@ export class WorkflowStore {
     timeOffsetSec: number = 0,
     attachedDocumentIds?: string[]
   ): WorkflowRun {
-    const activeIntent = intentText || "I'm starting an internship in Bangalore";
+    const activeIntent = intentText?.trim() || (templateId && TEMPLATES[templateId]?.defaultPrompt) || 'General Administrative Request';
     const selectedTemplateKey = templateId || classifyIntent(activeIntent);
     const templateConfig = TEMPLATES[selectedTemplateKey] || TEMPLATES['custom_operation'];
     const activeUserId = userIdentifier || 'usr_eva_admin';
