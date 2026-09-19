@@ -182,6 +182,18 @@ export const TEMPLATES: Record<string, OperationTemplateConfig> = {
       { field: 'ifsc_code', label: 'Branch IFSC Code' },
       { field: 'payout_currency', label: 'Remittance Currency' }
     ]
+  },
+  custom_operation: {
+    templateId: 'custom_operation',
+    title: 'Autonomous Administrative Task',
+    category: 'custom',
+    defaultPrompt: 'Custom Administrative Task',
+    targetSystem: 'EVA Autonomous Operational Sandbox',
+    resourceName: 'Form::"custom_operation"',
+    documentIds: [],
+    conflictField: 'work_location',
+    conflictDescription: 'No conflict detected for custom operation.',
+    fieldSchema: []
   }
 };
 
@@ -189,6 +201,8 @@ export function getSeedEvidence(workflowRunId: string, templateId: string = 'int
   const now = Date.now();
 
   switch (templateId) {
+    case 'custom_operation':
+      return [];
     case 'hardware_procurement':
       return [
         {

@@ -14,7 +14,7 @@ import {
 export const CEDAR_POLICIES = {
   POPULATE_FORM_PERMIT: `// Policy ID: policy_01_populate_permit
 permit (
-  principal in [EvaAgent::"form_execution", NexusAgent::"form_execution"],
+  principal in [EvaAgent::"form_filling", EvaAgent::"form_execution"],
   action == Action::"populate_form",
   resource in [
     Form::"internship_onboarding",
@@ -151,15 +151,16 @@ export class CedarEngine {
     evaluatedAt: string
   ): CedarEvaluationResult {
     const isPrincipalMatched =
-      principal === 'EvaAgent::"form_execution"' || principal === 'NexusAgent::"form_execution"';
+      principal === 'EvaAgent::"form_filling"' ||
+      principal === 'EvaAgent::"form_execution"';
     const isResourceMatched = typeof resource === 'string' && resource.startsWith('Form::');
     const isConflictResolved = context.conflict_resolved === true;
     const isConfidenceSufficient = context.evidence_confidence >= 0.60;
 
     const conditions: PolicyConditionResult[] = [
       {
-        name: 'principal_is_form_execution',
-        required: 'EvaAgent::"form_execution"',
+        name: 'principal_is_form_filling',
+        required: 'EvaAgent::"form_filling"',
         actual: principal,
         result: isPrincipalMatched ? 'PASS' : 'FAIL'
       },
@@ -246,6 +247,9 @@ export class CedarEngine {
   ): CedarEvaluationResult {
     const isHumanApproved = context.human_approved === true;
     const isConflictResolved = context.conflict_resolved === true;
+    // PRD Policy 02 requires human_approved AND action_hash_valid. Contexts
+    // predating the challenge field (undefined) keep prior behavior.
+    const isActionHashValid = context.action_hash_valid !== false;
 
     const conditions: PolicyConditionResult[] = [
       {
@@ -259,10 +263,16 @@ export class CedarEngine {
         required: 'true',
         actual: String(context.human_approved),
         result: isHumanApproved ? 'PASS' : 'FAIL'
+      },
+      {
+        name: 'action_hash_valid',
+        required: 'true',
+        actual: String(context.action_hash_valid ?? true),
+        result: isActionHashValid ? 'PASS' : 'FAIL'
       }
     ];
 
-    if (!isHumanApproved) {
+    if (!isHumanApproved || !isActionHashValid) {
       return {
         decisionId,
         principal,

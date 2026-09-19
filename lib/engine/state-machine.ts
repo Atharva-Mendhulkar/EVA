@@ -2,9 +2,13 @@
 // Coordinates: Intent -> Evidence -> Conflict -> Cedar -> Form -> Human Approval -> Submission -> Audit
 // PRINCIPLE: Server-side truth. Task tokens NEVER exposed to client. Real backend state transitions.
 
+import { randomBytes } from 'crypto';
 import { cedarEngine } from '../cedar/engine';
+import { appendAuditEvent, canonicalJson, sha256Hex } from '../audit/chain';
+import { buildPopulationPlan } from './form-plan';
+import { submitPopulatedForm } from '../playwright/executor';
 import { detectConflicts } from './comparator';
-import { getSeedEvidence, TEMPLATES } from './fixtures';
+import { DEMO_VAULT_DOCUMENTS, getSeedEvidence, TEMPLATES } from './fixtures';
 import {
   AuditEvent,
   AwaitingAction,
@@ -28,7 +32,7 @@ interface ServerTaskToken {
 }
 
 export function classifyIntent(intentText: string): string {
-  const text = (intentText || '').toLowerCase();
+  const text = (intentText || '').toLowerCase().trim();
   if (
     text.includes('hardware') ||
     text.includes('laptop') ||
@@ -63,54 +67,37 @@ export function classifyIntent(intentText: string): string {
   ) {
     return 'vendor_payout_update';
   }
-  return 'internship_onboarding';
+  if (
+    text.includes('intern') ||
+    text.includes('onboard') ||
+    text.includes('offer letter') ||
+    text.includes('noc')
+  ) {
+    return 'internship_onboarding';
+  }
+  return 'custom_operation';
 }
 
 export class WorkflowStore {
   private workflows = new Map<string, WorkflowRun>();
   private serverTokens = new Map<string, ServerTaskToken>();
-  private activeRunIdBySession = 'run_demo_01';
+  private activeRunIdBySession: string | null = null;
 
   constructor() {
     this.seedInitialWorkflows();
   }
 
+  /** Pre-seeds the four demo operations so the store is never empty on boot. */
   public seedInitialWorkflows(): void {
     const seeds = [
-      {
-        id: 'run_demo_01',
-        intent: "I'm starting an internship in Bangalore",
-        template: 'internship_onboarding',
-        userId: 'usr_eva_admin',
-        createdAtOffsetSec: 60
-      },
-      {
-        id: 'run_demo_02',
-        intent: 'Order a developer workstation for my engineering role',
-        template: 'hardware_procurement',
-        userId: 'usr_eva_admin',
-        createdAtOffsetSec: 3600
-      },
-      {
-        id: 'run_demo_03',
-        intent: 'File insurance reimbursement for my hospital bill',
-        template: 'medical_reimbursement',
-        userId: 'usr_eva_admin',
-        createdAtOffsetSec: 7200
-      },
-      {
-        id: 'run_demo_04',
-        intent: 'Update payout bank account for consulting invoices',
-        template: 'vendor_payout_update',
-        userId: 'usr_eva_admin',
-        createdAtOffsetSec: 10800
-      }
+      { id: 'run_demo_01', intent: "I'm starting an internship in Bangalore", template: 'internship_onboarding' },
+      { id: 'run_demo_02', intent: 'Order a developer workstation for my engineering role', template: 'hardware_procurement' },
+      { id: 'run_demo_03', intent: 'File insurance reimbursement for my hospital bill', template: 'medical_reimbursement' },
+      { id: 'run_demo_04', intent: 'Update payout bank account for consulting invoices', template: 'vendor_payout_update' }
     ];
-
     for (const seed of seeds) {
-      this.createWorkflow(seed.intent, seed.template, seed.userId, seed.id, seed.createdAtOffsetSec);
+      this.createWorkflow(seed.intent, seed.template, 'usr_eva_admin', seed.id);
     }
-
     this.activeRunIdBySession = 'run_demo_01';
   }
 
@@ -119,16 +106,51 @@ export class WorkflowStore {
     templateId?: string,
     userIdentifier?: string,
     customRunId?: string,
-    timeOffsetSec: number = 0
+    timeOffsetSec: number = 0,
+    attachedDocumentIds?: string[]
   ): WorkflowRun {
     const activeIntent = intentText || "I'm starting an internship in Bangalore";
     const selectedTemplateKey = templateId || classifyIntent(activeIntent);
-    const templateConfig = TEMPLATES[selectedTemplateKey] || TEMPLATES['internship_onboarding'];
+    const templateConfig = TEMPLATES[selectedTemplateKey] || TEMPLATES['custom_operation'];
     const activeUserId = userIdentifier || 'usr_eva_admin';
     const runId = customRunId || `run_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
+    const isCustom = selectedTemplateKey === 'custom_operation';
+    const dynamicTitle = isCustom
+      ? (activeIntent.trim().length > 36 ? activeIntent.trim().slice(0, 36) + '...' : (activeIntent.trim() || 'Custom Administrative Request'))
+      : templateConfig.title;
+    const dynamicTarget = isCustom
+      ? 'EVA Autonomous Operational Sandbox'
+      : templateConfig.targetSystem;
+
     const now = new Date(Date.now() - timeOffsetSec * 1000);
-    const evidenceList = getSeedEvidence(runId, templateConfig.templateId);
+
+    let evidenceList: Evidence[] = [];
+    if (attachedDocumentIds && attachedDocumentIds.length > 0) {
+      const vaultEvidence: Evidence[] = [];
+      for (const docId of attachedDocumentIds) {
+        const foundDoc = DEMO_VAULT_DOCUMENTS.find((d) => d.documentId === docId);
+        if (foundDoc) {
+          vaultEvidence.push({
+            evidenceId: `ev_att_${docId}_${Date.now()}`,
+            workflowRunId: runId,
+            field: 'identity_doc' as CanonicalField,
+            value: foundDoc.name,
+            sourceDocumentId: docId,
+            sourceDocumentName: foundDoc.name,
+            sourceLocation: 'Page 1, Attached',
+            sourceExcerpt: foundDoc.description,
+            extractedAt: now.toISOString(),
+            documentUpdatedAt: foundDoc.updatedAt,
+            confidence: 0.99
+          });
+        }
+      }
+      evidenceList = vaultEvidence;
+    } else {
+      evidenceList = getSeedEvidence(runId, templateConfig.templateId);
+    }
+
     const conflictResult = detectConflicts(runId, evidenceList);
 
     // Register server-side task token for conflict resolution if conflicts exist
@@ -144,9 +166,28 @@ export class WorkflowStore {
     }
 
     const initialPlan: WorkflowStep[] = [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Classified intent to ${templateConfig.templateId}` },
-      { stepId: 2, name: 'Gather documents', status: 'COMPLETED', detail: `${templateConfig.documentIds.length} documents retrieved from Personal Vault` },
-      { stepId: 3, name: 'Extract evidence', status: 'COMPLETED', detail: `${evidenceList.length} fields extracted via Bedrock Claude 3.5` },
+      {
+        stepId: 1,
+        name: 'Understand request',
+        status: 'COMPLETED',
+        detail: isCustom ? `Analyzed goal: "${activeIntent}"` : `Classified intent to ${templateConfig.templateId}`
+      },
+      {
+        stepId: 2,
+        name: 'Gather documents',
+        status: 'COMPLETED',
+        detail: isCustom
+          ? (evidenceList.length > 0 ? `${evidenceList.length} evidence sources gathered` : 'General execution with no documents required')
+          : `${templateConfig.documentIds.length} documents retrieved from Personal Vault`
+      },
+      {
+        stepId: 3,
+        name: 'Extract evidence',
+        status: 'COMPLETED',
+        detail: isCustom
+          ? (evidenceList.length > 0 ? `${evidenceList.length} fields extracted via Bedrock` : 'Direct administrative dispatch')
+          : `${evidenceList.length} fields extracted via Bedrock Claude 3.5`
+      },
       {
         stepId: 4,
         name: 'Reconcile information',
@@ -156,7 +197,7 @@ export class WorkflowStore {
           : 'All evidence reconciled cleanly'
       },
       { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar Policy Decision Point check' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Sandbox ${templateConfig.targetSystem} form population` },
+      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Sandbox ${dynamicTarget} preparation` },
       { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Server-persisted human consent gate' },
       { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Consequential external dispatch' }
     ];
@@ -209,7 +250,7 @@ export class WorkflowStore {
     ];
 
     if (firstConflict) {
-      initialAudit.push({
+      appendAuditEvent(initialAudit, {
         eventId: `aud_${Date.now()}_04_${runId}`,
         workflowRunId: runId,
         timestamp: new Date(now.getTime() - 10000).toISOString(),
@@ -247,7 +288,7 @@ export class WorkflowStore {
       activeIntent.toLowerCase().includes('instruction') ||
       activeIntent.toLowerCase().includes('system prompt')
     ) {
-      initialAudit.push({
+      appendAuditEvent(initialAudit, {
         eventId: `aud_${Date.now()}_sec_${runId}`,
         workflowRunId: runId,
         timestamp: now.toISOString(),
@@ -259,7 +300,7 @@ export class WorkflowStore {
     }
 
     if (activeIntent.toLowerCase().includes('bank') && templateConfig.templateId === 'internship_onboarding') {
-      initialAudit.push({
+      appendAuditEvent(initialAudit, {
         eventId: `aud_${Date.now()}_refusal_${runId}`,
         workflowRunId: runId,
         timestamp: now.toISOString(),
@@ -275,11 +316,11 @@ export class WorkflowStore {
       userId: activeUserId,
       intent: activeIntent,
       template: templateConfig.templateId,
-      title: templateConfig.title,
+      title: dynamicTitle,
       category: templateConfig.category,
-      targetSystem: templateConfig.targetSystem,
+      targetSystem: dynamicTarget,
       status: conflictResult.conflicts.length > 0 ? 'AWAITING_USER_RESOLUTION' : 'PLANNING',
-      currentStep: conflictResult.conflicts.length > 0 ? 'Resolve conflict' : 'Reconciling',
+      currentStep: conflictResult.conflicts.length > 0 ? 'Resolve conflict' : 'Processing request',
       stepIndex: 4,
       awaitingAction: conflictResult.conflicts.length > 0 ? 'CONFLICT_RESOLUTION' : null,
       plan: initialPlan,
@@ -298,25 +339,22 @@ export class WorkflowStore {
     return initialRun;
   }
 
-  public createOrResetDefault(intentText?: string, userIdentifier?: string): WorkflowRun {
-    return this.createWorkflow(
-      intentText || "I'm starting an internship in Bangalore",
-      'internship_onboarding',
-      userIdentifier || 'usr_eva_admin',
-      'run_demo_01'
-    );
+  /**
+   * Resets an existing run back to its initial state, preserving intent/template/runId.
+   */
+  public resetWorkflow(runId: string): WorkflowRun {
+    const existing = this.workflows.get(runId);
+    if (!existing) throw new Error(`Workflow run ${runId} not found.`);
+    return this.createWorkflow(existing.intent, existing.template, existing.userId, runId);
   }
 
   public getWorkflow(runId: string): WorkflowRun | null {
     return this.workflows.get(runId) || null;
   }
 
-  public getActiveWorkflow(): WorkflowRun {
-    let run = this.workflows.get(this.activeRunIdBySession);
-    if (!run) {
-      run = this.workflows.get('run_demo_01') || this.createOrResetDefault();
-    }
-    return run;
+  public getActiveWorkflow(): WorkflowRun | null {
+    if (!this.activeRunIdBySession) return null;
+    return this.workflows.get(this.activeRunIdBySession) || null;
   }
 
   public setActiveWorkflow(runId: string): WorkflowRun {
@@ -414,7 +452,7 @@ export class WorkflowStore {
         nextAction: 'Authorize draft form population via Cedar Policy Decision Point'
       }
     };
-    run.auditTrail.push(resolveAudit);
+    appendAuditEvent(run.auditTrail, resolveAudit);
 
     // Step 5: Cedar Authorization check for populate_form
     run.plan[3].status = 'COMPLETED';
@@ -423,13 +461,16 @@ export class WorkflowStore {
 
     const cedarResource = `Form::"${run.template}"` as CedarResource;
 
+    const evidenceConfidence = run.evidence.length > 0
+      ? run.evidence.reduce((acc, e) => acc + (e.confidence || 0), 0) / run.evidence.length
+      : 0;
     const populateDecision = cedarEngine.evaluate(
       'EvaAgent::"form_execution"',
       'Action::"populate_form"',
       cedarResource,
       {
         conflict_resolved: true,
-        evidence_confidence: 0.98,
+        evidence_confidence: Number(evidenceConfidence.toFixed(2)),
         human_approved: false,
         workflow_scope: run.template
       }
@@ -459,14 +500,12 @@ export class WorkflowStore {
         nextAction: `Populate fields in ${templateConfig.targetSystem}`
       }
     };
-    run.auditTrail.push(authAudit);
+    appendAuditEvent(run.auditTrail, authAudit);
 
     // Step 6: Form Population (Sandbox)
     run.plan[4].status = 'COMPLETED';
     run.plan[5].status = 'COMPLETED';
     run.status = 'POPULATING_FORM';
-
-    // Populate form fields dynamically matching template schema
     run.formFields = templateConfig.fieldSchema.map((item, idx) => {
       if (conflict && item.field === conflict.field) {
         return {
@@ -496,6 +535,47 @@ export class WorkflowStore {
       };
     });
 
+    // Form Filling Agent output: verified FormPopulationPlan (PRD Section 5.4)
+    const conflictResolution = conflict
+      ? {
+          [conflict.field]: {
+            value: resolvedValue,
+            evidenceId: selectedEvidenceId,
+            sourceDocument: selectedEv?.sourceDocumentName || 'Authoritative Selection',
+            sourceLocation: selectedEv?.sourceLocation || 'User Resolution',
+            confidence: 0.99
+          }
+        }
+      : {};
+    const { plan: populationPlan, fields: populatedFields } = buildPopulationPlan(
+      run.template,
+      runId,
+      templateConfig.fieldSchema,
+      run.evidence,
+      conflictResolution
+    );
+    run.formPopulationPlan = populationPlan;
+    run.formFields = populatedFields;
+    const avgConfidence = populationPlan.confidence;
+
+    // Action-bound ApprovalChallenge (PRD Section 9.2): single-use nonce bound
+    // to the exact populated form state. Any post-request form mutation
+    // invalidates the challenge at approval time.
+    const formStateHash = sha256Hex(canonicalJson(run.formFields));
+    const challengeNonce = randomBytes(16).toString('hex');
+    run.approvalChallenge = {
+      approvalId: `appr_${Date.now()}_${runId}`,
+      workflowRunId: runId,
+      action: 'submit_form',
+      formId: run.template,
+      formStateHash,
+      actionHash: sha256Hex(`${runId}:${run.template}:${formStateHash}:${challengeNonce}`),
+      nonce: challengeNonce,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      status: 'pending'
+    };
+
     // Step 7: Cedar Evaluation for submit_form BEFORE human approval -> MUST PRODUCE REAL CEDAR DENY!
     const submitPreDecision = cedarEngine.evaluate(
       'EvaAgent::"form_execution"',
@@ -503,7 +583,7 @@ export class WorkflowStore {
       cedarResource,
       {
         conflict_resolved: true,
-        evidence_confidence: 0.98,
+        evidence_confidence: avgConfidence,
         human_approved: false, // NOT YET APPROVED
         workflow_scope: run.template
       }
@@ -533,7 +613,7 @@ export class WorkflowStore {
         whatWouldChange: 'Changing human_approved from false to true via user approval will result in Cedar ALLOW.'
       }
     };
-    run.auditTrail.push(denyAudit);
+    appendAuditEvent(run.auditTrail, denyAudit);
 
     // Register Step Functions Approval Task Token server-side
     const approvalToken = `sfn_token_approval_${Date.now()}`;
@@ -568,7 +648,8 @@ export class WorkflowStore {
   public approveSubmission(
     runId: string,
     decision: 'APPROVE' | 'REJECT',
-    notes?: string
+    notes?: string,
+    nonce?: string
   ): WorkflowRun {
     const run = this.workflows.get(runId);
     if (!run) throw new Error(`Workflow run ${runId} not found.`);
@@ -582,8 +663,28 @@ export class WorkflowStore {
       throw new Error('No active human approval task token found on server (possible duplicate callback or replay).');
     }
 
+    // Action-bound challenge verification (PRD Section 9.2). The frontend can
+    // never supply human_approved directly — only the single-use nonce issued
+    // with the exact form state it reviewed.
+    const challenge = run.approvalChallenge;
+    if (!challenge || challenge.status !== 'pending') {
+      throw new Error('No active approval challenge (possible replay).');
+    }
+    if (Date.now() > new Date(challenge.expiresAt).getTime()) {
+      challenge.status = 'expired';
+      throw new Error('Approval challenge expired. Re-request approval.');
+    }
+    if (!nonce || nonce !== challenge.nonce) {
+      throw new Error('Invalid approval nonce.');
+    }
+    if (sha256Hex(canonicalJson(run.formFields)) !== challenge.formStateHash) {
+      challenge.status = 'revoked';
+      throw new Error('Form state changed after approval was requested. Challenge invalidated.');
+    }
+
     if (decision === 'REJECT') {
       this.serverTokens.delete(runId);
+      challenge.status = 'revoked';
       run.status = 'FAILED';
       run.awaitingAction = null;
       run.plan[6].status = 'FAILED';
@@ -593,6 +694,7 @@ export class WorkflowStore {
 
     // Human Approval granted
     this.serverTokens.delete(runId); // Consume token
+    challenge.status = 'consumed';
 
     const approvalAudit: AuditEvent = {
       eventId: `aud_${Date.now()}_user_appr`,
@@ -617,7 +719,7 @@ export class WorkflowStore {
         nextAction: 'Re-evaluate Cedar Policy with human_approved = true'
       }
     };
-    run.auditTrail.push(approvalAudit);
+    appendAuditEvent(run.auditTrail, approvalAudit);
 
     const cedarResource = `Form::"${run.template}"` as CedarResource;
     const templateConfig = TEMPLATES[run.template] || TEMPLATES['internship_onboarding'];
@@ -629,8 +731,9 @@ export class WorkflowStore {
       cedarResource,
       {
         conflict_resolved: true,
-        evidence_confidence: 0.98,
+        evidence_confidence: run.formPopulationPlan?.confidence ?? 0.98,
         human_approved: true, // APPROVED!
+        action_hash_valid: true, // challenge verified above
         workflow_scope: run.template
       }
     );
@@ -657,9 +760,15 @@ export class WorkflowStore {
         nextAction: `Execute sandbox dispatch to ${templateConfig.targetSystem}`
       }
     };
-    run.auditTrail.push(allowSubmitAudit);
+    appendAuditEvent(run.auditTrail, allowSubmitAudit);
 
-    // Final Execution: Mock Sandbox Submission
+    // Final Execution: deterministic sandbox submission (PRD Section 10)
+    const receipt = submitPopulatedForm(
+      run.template,
+      templateConfig.targetSystem,
+      run.formFields.length,
+      true
+    );
     run.status = 'COMPLETED';
     run.awaitingAction = null;
     run.plan[6].status = 'COMPLETED';
@@ -674,7 +783,7 @@ export class WorkflowStore {
       actor: 'EvaAgent::"form_execution"',
       action: 'sandbox_submission',
       decision: 'SUCCESS',
-      reason: `Sandbox External Action: ${run.formFields.length} verified fields submitted to ${templateConfig.targetSystem} (HTTP 200). Authorization boundary verified.`,
+      reason: `Sandbox External Action: ${receipt.fieldsSubmitted} verified fields submitted to ${templateConfig.targetSystem} (HTTP ${receipt.statusCode}, ${receipt.receiptId}). Authorization boundary verified.`,
       explanation: {
         decisionId: `exp_comp_${Date.now()}`,
         action: 'sandbox_submission',
@@ -693,7 +802,7 @@ export class WorkflowStore {
         nextAction: 'Append-Only Audit Trail ready for inspection'
       }
     };
-    run.auditTrail.push(submissionAudit);
+    appendAuditEvent(run.auditTrail, submissionAudit);
     run.latestExplanation = submissionAudit.explanation;
     run.updatedAt = new Date().toISOString();
 

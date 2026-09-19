@@ -31,6 +31,7 @@ import { FeaturesModal } from '@/components/FeaturesModal';
 import { DocumentUploadModal } from '@/components/DocumentUploadModal';
 import { Evidence, WorkflowRun } from '@/lib/engine/types';
 import { TEMPLATES } from '@/lib/engine/fixtures';
+import { apiFetch } from '@/lib/session/client';
 
 function StarrySky() {
   return (
@@ -51,7 +52,7 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'Answer' | 'Vault' | 'Audit'>('Answer');
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null);
   const [allWorkflows, setAllWorkflows] = useState<WorkflowRun[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [featuresModalOpen, setFeaturesModalOpen] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
@@ -65,11 +66,11 @@ export default function Page() {
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string; size: number; fingerprint: string; extractedCount: number }[]>([]);
   const [isUploadingInChat, setIsUploadingInChat] = useState(false);
 
-  // Chatbox Search, Form Filling, MCP, Tools capability toggles
-  const [enableSearch, setEnableSearch] = useState(true);
-  const [enableFormFill, setEnableFormFill] = useState(true);
-  const [enableMcp, setEnableMcp] = useState(true);
-  const [enableTools, setEnableTools] = useState(true);
+  // Chatbox Search, Form Filling, MCP, Tools capability toggles (start unhighlighted, click to highlight)
+  const [enableSearch, setEnableSearch] = useState(false);
+  const [enableFormFill, setEnableFormFill] = useState(false);
+  const [enableMcp, setEnableMcp] = useState(false);
+  const [enableTools, setEnableTools] = useState(false);
 
   const landingFileInputRef = React.useRef<HTMLInputElement>(null);
   const followUpFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -100,19 +101,20 @@ export default function Page() {
         const file = files[i];
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch('/api/v1/vault/upload', {
+        const res = await apiFetch('/api/v1/vault/upload', {
           method: 'POST',
           body: formData
         });
         if (res.ok) {
           const data = await res.json();
+          const docId = data.document?.documentId || data.document?.id || `upload_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`;
           setUploadedFiles((prev) => [
             ...prev,
             {
-              id: data.document.id,
+              id: docId,
               name: file.name,
               size: file.size,
-              fingerprint: data.document.sha256Fingerprint?.slice(0, 8) || '',
+              fingerprint: data.document?.sha256Fingerprint?.slice(0, 8) || docId.slice(0, 8),
               extractedCount: data.extractedEvidence?.length || 0
             }
           ]);
@@ -135,20 +137,21 @@ export default function Page() {
   const fetchWorkflow = async () => {
     try {
       // 1. Fetch active workflow
-      const res = await fetch('/api/v1/workflows');
+      const res = await apiFetch('/api/v1/workflows');
       if (res.ok) {
-        const data: WorkflowRun = await res.json();
-        setWorkflow(data);
-        if (data.intent && !promptText && typeof window !== 'undefined' && (sessionStorage.getItem('eva_started') === 'true' || sessionStorage.getItem('nexus_started') === 'true')) {
-          setPromptText(data.intent);
-        }
-        if (typeof window !== 'undefined' && (sessionStorage.getItem('eva_started') === 'true' || sessionStorage.getItem('nexus_started') === 'true')) {
-          setStarted(true);
+        const data: WorkflowRun | null = await res.json();
+        if (data && data.workflowRunId) {
+          setWorkflow(data);
+          if (data.intent && !promptText && typeof window !== 'undefined' && sessionStorage.getItem('eva_started') === 'true') {
+            setPromptText(data.intent);
+          }
+        } else {
+          setWorkflow(null);
         }
       }
 
       // 2. Fetch list of all workflows for sidebar
-      const listRes = await fetch('/api/v1/workflows?all=true');
+      const listRes = await apiFetch('/api/v1/workflows?all=true');
       if (listRes.ok) {
         const listData = await listRes.json();
         if (Array.isArray(listData.workflows)) {
@@ -176,7 +179,7 @@ export default function Page() {
       setStarted(true);
       setShowConflictModal(false);
 
-      const res = await fetch('/api/v1/workflows', {
+      const res = await apiFetch('/api/v1/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -222,7 +225,7 @@ export default function Page() {
   const handleSelectWorkflow = async (runId: string) => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/v1/workflows/active', {
+      const res = await apiFetch('/api/v1/workflows/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runId })
@@ -294,7 +297,7 @@ export default function Page() {
 
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/v1/workflows/${workflow.workflowRunId}/conflicts/${conflict.conflictId}/resolve`, {
+      const res = await apiFetch(`/api/v1/workflows/${workflow.workflowRunId}/conflicts/${conflict.conflictId}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -320,10 +323,10 @@ export default function Page() {
 
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/v1/workflows/${workflow.workflowRunId}/approve`, {
+      const res = await apiFetch(`/api/v1/workflows/${workflow.workflowRunId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision: 'APPROVE', notes: 'Verified via evidence drawer & human sign-off' })
+        body: JSON.stringify({ decision: 'APPROVE', notes: 'Verified via evidence drawer & human sign-off', nonce: workflow.approvalChallenge?.nonce })
       });
 
       if (res.ok) {
@@ -342,7 +345,7 @@ export default function Page() {
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('nexus_started');
       }
-      const res = await fetch(`/api/v1/workflows/${workflow?.workflowRunId || 'run_demo_01'}/reset`, { method: 'POST' });
+      const res = await apiFetch(`/api/v1/workflows/${workflow?.workflowRunId || 'run_demo_01'}/reset`, { method: 'POST' });
       if (res.ok) {
         const fresh = await res.json();
         setWorkflow(fresh);
@@ -412,9 +415,9 @@ export default function Page() {
                 {/* Attached in-chat documents preview */}
                 {uploadedFiles.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 mb-2.5 pb-2 border-b border-white/10">
-                    {uploadedFiles.map((f) => (
+                    {uploadedFiles.map((f, idx) => (
                       <span
-                        key={f.id}
+                        key={f.id || `landing_att_${idx}_${f.name}`}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 border border-white/15 text-[11px] font-mono text-white"
                       >
                         <Paperclip className="w-3 h-3 text-white/70" />
@@ -470,7 +473,7 @@ export default function Page() {
                       type="button"
                       onClick={() => landingFileInputRef.current?.click()}
                       disabled={isUploadingInChat}
-                      className="capsule-pill transition flex items-center gap-1.5 text-white/70 hover:text-white hover:bg-white/10 border-white/10"
+                      className={`capsule-pill ${uploadedFiles.length > 0 ? 'active' : ''}`}
                       title="Upload & Attach Document (In-Memory OCR)"
                       aria-label="Attach document"
                     >
@@ -482,11 +485,7 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={() => setEnableSearch(!enableSearch)}
-                      className={`capsule-pill transition flex items-center gap-1.5 ${
-                        enableSearch
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'text-white/50 hover:text-white/80 hover:bg-white/5 border-white/10'
-                      }`}
+                      className={`capsule-pill ${enableSearch ? 'active' : ''}`}
                       title="Toggle Grounded Vector Search"
                       aria-label="Toggle grounded search"
                     >
@@ -498,11 +497,7 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={() => setEnableFormFill(!enableFormFill)}
-                      className={`capsule-pill transition flex items-center gap-1.5 ${
-                        enableFormFill
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'text-white/50 hover:text-white/80 hover:bg-white/5 border-white/10'
-                      }`}
+                      className={`capsule-pill ${enableFormFill ? 'active' : ''}`}
                       title="Toggle Autonomous Form Filling"
                       aria-label="Toggle autonomous form filling"
                     >
@@ -514,11 +509,7 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={() => setEnableMcp(!enableMcp)}
-                      className={`capsule-pill transition flex items-center gap-1.5 ${
-                        enableMcp
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'text-white/50 hover:text-white/80 hover:bg-white/5 border-white/10'
-                      }`}
+                      className={`capsule-pill ${enableMcp ? 'active' : ''}`}
                       title="Toggle Model Context Protocol (MCP)"
                       aria-label="Toggle MCP"
                     >
@@ -530,11 +521,7 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={() => setEnableTools(!enableTools)}
-                      className={`capsule-pill transition flex items-center gap-1.5 ${
-                        enableTools
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'text-white/50 hover:text-white/80 hover:bg-white/5 border-white/10'
-                      }`}
+                      className={`capsule-pill ${enableTools ? 'active' : ''}`}
                       title="Toggle Agent Tools"
                       aria-label="Toggle tools"
                     >
@@ -756,9 +743,9 @@ export default function Page() {
                   {/* Attached file chips preview */}
                   {uploadedFiles.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-white/10 w-full">
-                      {uploadedFiles.map((f) => (
+                      {uploadedFiles.map((f, idx) => (
                         <span
-                          key={f.id}
+                          key={f.id || `docked_att_${idx}_${f.name}`}
                           className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/10 border border-white/15 text-[11px] font-mono text-white"
                         >
                           <Paperclip className="w-3 h-3 text-white/70" />
@@ -793,72 +780,56 @@ export default function Page() {
                   />
 
                   <div className="bottom-docked-input-row">
-                    {/* Pin Upload Button */}
+                    {/* Attach (Pin) */}
                     <button
                       type="button"
                       onClick={() => followUpFileInputRef.current?.click()}
                       disabled={isUploadingInChat}
-                      className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition flex items-center justify-center shrink-0 border border-white/10"
+                      className={`docked-cap-btn ${uploadedFiles.length > 0 ? 'active' : ''}`}
                       title="Upload & Attach Document (In-Memory OCR)"
                       aria-label="Attach document"
                     >
-                      <Pin className="w-4 h-4 text-white/80" />
+                      <Pin className="w-4 h-4" />
                     </button>
 
-                    {/* Search Globe Toggle - Highlighted when active */}
+                    {/* Search Globe Toggle */}
                     <button
                       type="button"
                       onClick={() => setEnableSearch(!enableSearch)}
-                      className={`p-1.5 rounded-lg transition flex items-center justify-center shrink-0 border ${
-                        enableSearch
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'hover:bg-white/10 text-white/50 hover:text-white/80 border-white/10'
-                      }`}
+                      className={`docked-cap-btn ${enableSearch ? 'active' : ''}`}
                       title="Toggle Grounded Vector Search"
                       aria-label="Search"
                     >
                       <Globe className="w-4 h-4" />
                     </button>
 
-                    {/* Form Fill Toggle - Highlighted when active */}
+                    {/* Form Fill Toggle */}
                     <button
                       type="button"
                       onClick={() => setEnableFormFill(!enableFormFill)}
-                      className={`p-1.5 rounded-lg transition flex items-center justify-center shrink-0 border ${
-                        enableFormFill
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'hover:bg-white/10 text-white/50 hover:text-white/80 border-white/10'
-                      }`}
+                      className={`docked-cap-btn ${enableFormFill ? 'active' : ''}`}
                       title="Toggle Autonomous Form Filling"
                       aria-label="Form Fill"
                     >
                       <ClipboardList className="w-4 h-4" />
                     </button>
 
-                    {/* MCP Toggle - Highlighted when active */}
+                    {/* MCP Toggle */}
                     <button
                       type="button"
                       onClick={() => setEnableMcp(!enableMcp)}
-                      className={`p-1.5 rounded-lg transition flex items-center justify-center shrink-0 border ${
-                        enableMcp
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'hover:bg-white/10 text-white/50 hover:text-white/80 border-white/10'
-                      }`}
+                      className={`docked-cap-btn ${enableMcp ? 'active' : ''}`}
                       title="Toggle Model Context Protocol (MCP)"
                       aria-label="MCP"
                     >
                       <Cpu className="w-4 h-4" />
                     </button>
 
-                    {/* Tools Toggle - Highlighted when active */}
+                    {/* Tools Toggle */}
                     <button
                       type="button"
                       onClick={() => setEnableTools(!enableTools)}
-                      className={`p-1.5 rounded-lg transition flex items-center justify-center shrink-0 border ${
-                        enableTools
-                          ? 'bg-white text-black font-medium border-white shadow-sm'
-                          : 'hover:bg-white/10 text-white/50 hover:text-white/80 border-white/10'
-                      }`}
+                      className={`docked-cap-btn ${enableTools ? 'active' : ''}`}
                       title="Toggle Agent Tools"
                       aria-label="Tools"
                     >

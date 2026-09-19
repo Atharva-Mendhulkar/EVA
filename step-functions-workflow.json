@@ -1,20 +1,20 @@
 {
-  "Comment": "NEXUS Core Administrative Workflow Execution Machine (PRD Section 14.2)",
+  "Comment": "EVA Onboarding State Machine (PRD Section 14)",
   "StartAt": "RetrieveVaultDocuments",
   "States": {
     "RetrieveVaultDocuments": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-vault-retriever",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-vault-retriever",
       "Next": "ExtractEvidenceBedrock"
     },
     "ExtractEvidenceBedrock": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-bedrock-extractor",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-bedrock-extractor",
       "Next": "DetectConflicts"
     },
     "DetectConflicts": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-conflict-detector",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-conflict-detector",
       "Next": "EvaluateConflictCondition"
     },
     "EvaluateConflictCondition": {
@@ -33,7 +33,7 @@
       "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
       "TimeoutSeconds": 86400,
       "Parameters": {
-        "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:nexus-token-registrar",
+        "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:eva-token-registrar",
         "Payload": {
           "step": "CONFLICT_RESOLUTION",
           "taskToken.$": "$$.Task.Token",
@@ -44,15 +44,15 @@
     },
     "ApplyConflictResolution": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-apply-resolution",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-apply-resolution",
       "Next": "AuthorizePopulate"
     },
     "AuthorizePopulate": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-cedar-evaluator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-evaluator",
       "Parameters": {
         "action": "Action::\"populate_form\"",
-        "principal": "NexusAgent::\"form_execution\"",
+        "principal": "EvaAgent::\"form_execution\"",
         "resource": "Form::\"internship_onboarding\"",
         "context": {
           "conflict_resolved": true,
@@ -76,15 +76,15 @@
     },
     "ExecuteFormPopulation": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-form-populator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-form-populator",
       "Next": "AuthorizeSubmitPreApproval"
     },
     "AuthorizeSubmitPreApproval": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-cedar-evaluator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-evaluator",
       "Parameters": {
         "action": "Action::\"submit_form\"",
-        "principal": "NexusAgent::\"form_execution\"",
+        "principal": "EvaAgent::\"form_execution\"",
         "resource": "Form::\"internship_onboarding\"",
         "context": {
           "conflict_resolved": true,
@@ -100,7 +100,7 @@
       "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
       "TimeoutSeconds": 86400,
       "Parameters": {
-        "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:nexus-token-registrar",
+        "FunctionName": "arn:aws:lambda:us-east-1:123456789012:function:eva-token-registrar",
         "Payload": {
           "step": "HUMAN_APPROVAL",
           "taskToken.$": "$$.Task.Token",
@@ -111,10 +111,10 @@
     },
     "AuthorizeSubmitPostApproval": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-cedar-evaluator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-evaluator",
       "Parameters": {
         "action": "Action::\"submit_form\"",
-        "principal": "NexusAgent::\"form_execution\"",
+        "principal": "EvaAgent::\"form_execution\"",
         "resource": "Form::\"internship_onboarding\"",
         "context": {
           "conflict_resolved": true,
@@ -138,12 +138,12 @@
     },
     "ExecuteFormSubmission": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-form-submitter",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-form-submitter",
       "Next": "WriteFinalAuditAndComplete"
     },
     "WriteFinalAuditAndComplete": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:nexus-audit-writer",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-audit-writer",
       "Next": "WorkflowCompleted"
     },
     "WorkflowCompleted": {

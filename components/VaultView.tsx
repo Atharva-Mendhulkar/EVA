@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import { DEMO_VAULT_DOCUMENTS } from '@/lib/engine/fixtures';
 import { DocumentMetadata } from '@/lib/engine/types';
+import { apiFetch } from '@/lib/session/client';
 
 export function VaultView() {
   const [documents, setDocuments] = useState<DocumentMetadata[]>(DEMO_VAULT_DOCUMENTS);
@@ -14,7 +15,7 @@ export function VaultView() {
     async function loadVaultDocs() {
       try {
         setIsLoading(true);
-        const res = await fetch('/api/v1/vault/documents');
+        const res = await apiFetch('/api/v1/vault/documents');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.documents) && data.documents.length > 0) {

@@ -1,0 +1,17 @@
+{
+  "name": "eva-infra",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.200.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3"
+  }
+}

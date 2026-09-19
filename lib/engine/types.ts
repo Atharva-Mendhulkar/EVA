@@ -32,6 +32,8 @@ export type CanonicalField =
   // Negative test field
   | 'bank_account_number';
 
+export type ProvenanceStatus = 'SOURCE_BACKED' | 'USER_ASSERTED' | 'SYSTEM_DERIVED';
+
 export interface Evidence {
   evidenceId: string;
   workflowRunId: string;
@@ -44,6 +46,50 @@ export interface Evidence {
   extractedAt: string;
   documentUpdatedAt: string;
   confidence: number; // 0.00 to 1.00
+  provenanceStatus?: ProvenanceStatus;
+  extractionMethod?: string;
+}
+
+export interface FieldMapping {
+  formField: string;
+  canonicalField: CanonicalField;
+  evidenceId: string;
+  value: string;
+  sourceDocumentId: string;
+  confidence: number;
+  rationale: string;
+}
+
+export interface FormPopulationPlan {
+  formId: string;
+  workflowRunId: string;
+  mappings: FieldMapping[];
+  missingFields: string[];
+  ambiguousFields: string[];
+  confidence: number;
+  agentVersion: string;
+  generatedAt?: string;
+}
+
+export interface ApprovalChallenge {
+  approvalId: string;
+  workflowRunId: string;
+  action: 'submit_form';
+  formId: string;
+  formStateHash: string;
+  actionHash: string;
+  nonce: string;
+  createdAt: string;
+  expiresAt: string;
+  status: 'pending' | 'consumed' | 'expired' | 'revoked';
+}
+
+export interface SessionRecord {
+  sessionId: string;
+  secretHash: string;
+  createdAt: string;
+  expiresAt: string;
+  status: 'active' | 'revoked' | 'expired';
 }
 
 export interface Conflict {
@@ -69,17 +115,14 @@ export interface Conflict {
 
 export type CedarPrincipal =
   | 'EvaAgent::"orchestrator"'
+  | 'EvaAgent::"employment"'
+  | 'EvaAgent::"evidence"'
+  | 'EvaAgent::"form_filling"'
+  | 'EvaAgent::"form_execution"'
   | 'EvaAgent::"planner"'
   | 'EvaAgent::"search"'
   | 'EvaAgent::"document_evidence"'
-  | 'EvaAgent::"form_execution"'
   | 'EvaAgent::"compliance_auditor"'
-  | 'NexusAgent::"orchestrator"'
-  | 'NexusAgent::"planner"'
-  | 'NexusAgent::"search"'
-  | 'NexusAgent::"document_evidence"'
-  | 'NexusAgent::"form_execution"'
-  | 'NexusAgent::"compliance_auditor"'
   | `User::"${string}"`;
 
 export type CedarAction =
@@ -100,6 +143,7 @@ export interface CedarContext {
   conflict_resolved: boolean;
   evidence_confidence: number;
   human_approved: boolean;
+  action_hash_valid?: boolean;
   workflow_scope: string;
   has_unresolved_critical_conflict?: boolean;
 }
@@ -149,6 +193,9 @@ export interface DecisionExplanation {
 export interface AuditEvent {
   eventId: string;
   workflowRunId: string;
+  sessionId?: string;
+  previousEventHash?: string; // SHA-256 of preceding event (genesis = "GENESIS")
+  eventHash?: string; // SHA-256(canonicalJson(event without eventHash))
   timestamp: string;
   actor: string;
   action: string;
@@ -199,6 +246,7 @@ export type OperationCategory = 'onboarding' | 'procurement' | 'medical' | 'fina
 
 export interface WorkflowRun {
   workflowRunId: string;
+  sessionId?: string;
   userId: string;
   intent: string;
   template: string;
@@ -215,6 +263,8 @@ export interface WorkflowRun {
   auditTrail: AuditEvent[];
   cedarDecisions: CedarEvaluationResult[];
   formFields: FormField[];
+  formPopulationPlan?: FormPopulationPlan;
+  approvalChallenge?: ApprovalChallenge;
   latestExplanation?: DecisionExplanation;
   createdAt: string;
   updatedAt: string;

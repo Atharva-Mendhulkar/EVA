@@ -1,0 +1,82 @@
+{
+  "Eva": {
+    "entityTypes": {
+      "EvaAgent": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "agentRole": { "type": "String" }
+          }
+        }
+      },
+      "Session": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "isActive": { "type": "Boolean" }
+          }
+        }
+      },
+      "Form": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "formType": { "type": "String" },
+            "isSandboxed": { "type": "Boolean" }
+          }
+        }
+      },
+      "Document": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "sensitivity": { "type": "String" }
+          }
+        }
+      }
+    },
+    "actions": {
+      "read_document": {
+        "appliesTo": {
+          "principalTypes": ["EvaAgent"],
+          "resourceTypes": ["Document"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "workflow_scope": { "type": "String" }
+            }
+          }
+        }
+      },
+      "populate_form": {
+        "appliesTo": {
+          "principalTypes": ["EvaAgent"],
+          "resourceTypes": ["Form"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "conflict_resolved": { "type": "Boolean" },
+              "evidence_confidence": { "type": "Decimal" },
+              "workflow_scope": { "type": "String" }
+            }
+          }
+        }
+      },
+      "submit_form": {
+        "appliesTo": {
+          "principalTypes": ["EvaAgent"],
+          "resourceTypes": ["Form"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "human_approved": { "type": "Boolean" },
+              "action_hash_valid": { "type": "Boolean" },
+              "conflict_resolved": { "type": "Boolean" },
+              "workflow_scope": { "type": "String" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

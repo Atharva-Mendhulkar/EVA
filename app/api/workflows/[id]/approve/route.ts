@@ -8,9 +8,9 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { decision = 'APPROVE', notes } = body;
+    const { decision = 'APPROVE', notes, nonce } = body;
 
-    const updatedWorkflow = workflowStore.approveSubmission(id, decision, notes);
+    const updatedWorkflow = workflowStore.approveSubmission(id, decision, notes, nonce);
     return NextResponse.json(updatedWorkflow);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 });

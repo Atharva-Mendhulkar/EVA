@@ -6,8 +6,6 @@
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
 [![AWS][aws-shield]][aws-url]
 [![Amazon Bedrock][bedrock-shield]][bedrock-url]
 [![Strands Agents][strands-shield]][strands-url]

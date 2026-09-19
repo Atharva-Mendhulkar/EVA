@@ -390,6 +390,57 @@ button, textarea, input {
   border-color: var(--border-focus);
 }
 
+.capsule-pill.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+  font-weight: 500;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.28);
+}
+
+.capsule-pill.active:hover {
+  background: #f4f4f5 !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+
+.capsule-pill.active svg {
+  color: #000000 !important;
+  stroke: #000000 !important;
+}
+
+.docked-cap-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.docked-cap-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.docked-cap-btn.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.28);
+}
+
+.docked-cap-btn.active svg {
+  color: #000000 !important;
+  stroke: #000000 !important;
+}
+
 .action-circle-btn {
   width: 32px;
   height: 32px;

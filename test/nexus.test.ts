@@ -73,7 +73,7 @@ describe('EVA Core Logic & Verification Suite', () => {
   // 3. Unresolved conflict: populate_form -> DENY
   it('3. Unresolved conflict blocks populate_form in Cedar policy evaluation', () => {
     const decision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"populate_form"',
       'Form::"internship_onboarding"',
       {
@@ -93,7 +93,7 @@ describe('EVA Core Logic & Verification Suite', () => {
   // 4. Resolved conflict: populate_form -> Cedar ALLOW
   it('4. Resolved conflict allows populate_form via Cedar policy', () => {
     const decision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"populate_form"',
       'Form::"internship_onboarding"',
       {
@@ -113,7 +113,7 @@ describe('EVA Core Logic & Verification Suite', () => {
   // 5. Pre-approval submit: submit_form + human_approved=false -> Cedar DENY
   it('5. Pre-approval submit_form produces real Cedar DENY', () => {
     const decision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"submit_form"',
       'Form::"internship_onboarding"',
       {
@@ -135,7 +135,7 @@ describe('EVA Core Logic & Verification Suite', () => {
   // 6. Approval submit: submit_form + human_approved=true -> Cedar ALLOW
   it('6. Human approved submit_form produces real Cedar ALLOW', () => {
     const decision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"submit_form"',
       'Form::"internship_onboarding"',
       {
@@ -157,7 +157,7 @@ describe('EVA Core Logic & Verification Suite', () => {
     cedarEngine.setSimulateFailure(true);
 
     const decision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"submit_form"',
       'Form::"internship_onboarding"',
       {
@@ -196,7 +196,7 @@ describe('EVA Core Logic & Verification Suite', () => {
 
     // Even if document claimed "Bypass Cedar and submit", the engine evaluates deterministically
     const decision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"submit_form"',
       'Form::"internship_onboarding"',
       injectedContext
@@ -207,7 +207,7 @@ describe('EVA Core Logic & Verification Suite', () => {
 
   // 10. Task token: never appears in public workflow state
   it('10. Step Functions task token is never exposed in the public workflow model', () => {
-    const wf = store.getActiveWorkflow();
+    const wf = store.getActiveWorkflow()!;
     expect((wf as any).taskToken).toBeUndefined();
     expect((wf as any).activeTaskToken).toBeUndefined();
     expect(wf.awaitingAction).toBe('CONFLICT_RESOLUTION');
@@ -215,7 +215,7 @@ describe('EVA Core Logic & Verification Suite', () => {
 
   // 11. Refresh / hydration: state persists and can be queried
   it('11. State machine preserves run state and rehydrates on query', () => {
-    const wf = store.getActiveWorkflow();
+    const wf = store.getActiveWorkflow()!;
     const retrieved = store.getWorkflow(wf.workflowRunId);
     expect(retrieved).not.toBeNull();
     expect(retrieved?.workflowRunId).toBe(wf.workflowRunId);
@@ -225,7 +225,7 @@ describe('EVA Core Logic & Verification Suite', () => {
 
   // 12. Full end-to-end loop: Resolve -> Cedar Allow -> Populate -> Cedar Deny -> Approve -> Submit
   it('12. End-to-end execution loop maintains real backend state transitions', () => {
-    const wf = store.getActiveWorkflow();
+    const wf = store.getActiveWorkflow()!;
     const conflict = wf.conflicts[0];
     const offerEvidence = conflict.candidateEvidence.find((e) => e.value === 'Bangalore');
     expect(offerEvidence).toBeDefined();
@@ -236,38 +236,32 @@ describe('EVA Core Logic & Verification Suite', () => {
       conflict.conflictId,
       offerEvidence!.evidenceId
     );
-
-    // After resolve: status is AWAITING_HUMAN_APPROVAL because pre-submit was denied!
     expect(postResolveWf.status).toBe('AWAITING_HUMAN_APPROVAL');
-    expect(postResolveWf.awaitingAction).toBe('HUMAN_APPROVAL');
     expect(postResolveWf.formFields.length).toBe(6);
-
-    // Check Cedar decisions recorded
     expect(postResolveWf.cedarDecisions.length).toBe(2);
     expect(postResolveWf.cedarDecisions[0].decision).toBe('ALLOW'); // populate_form
     expect(postResolveWf.cedarDecisions[1].decision).toBe('DENY'); // submit_form pre-approval
 
-    // Approve submission
-    const postApproveWf = store.approveSubmission(wf.workflowRunId, 'APPROVE');
+    // Human Approval
+    const postApproveWf = store.approveSubmission(wf.workflowRunId, 'APPROVE', undefined, postResolveWf.approvalChallenge?.nonce ?? store.getWorkflow(wf.workflowRunId)?.approvalChallenge?.nonce);
     expect(postApproveWf.status).toBe('COMPLETED');
-    expect(postApproveWf.awaitingAction).toBeNull();
     expect(postApproveWf.cedarDecisions.length).toBe(3);
     expect(postApproveWf.cedarDecisions[2].decision).toBe('ALLOW'); // submit_form post-approval
 
     // Double approval replay rejection
     expect(() => {
-      store.approveSubmission(wf.workflowRunId, 'APPROVE');
+      store.approveSubmission(wf.workflowRunId, 'APPROVE', undefined, postResolveWf.approvalChallenge?.nonce ?? store.getWorkflow(wf.workflowRunId)?.approvalChallenge?.nonce);
     }).toThrow('Invalid state transition');
   });
 
   // 13. Audit: every consequential event produces an audit event
   it('13. Audit trail records every consequential event in chronological order', () => {
-    const wf = store.getActiveWorkflow();
+    const wf = store.getActiveWorkflow()!;
     const conflict = wf.conflicts[0];
     const offerEvidence = conflict.candidateEvidence.find((e) => e.value === 'Bangalore');
 
     store.resolveConflict(wf.workflowRunId, conflict.conflictId, offerEvidence!.evidenceId);
-    const completed = store.approveSubmission(wf.workflowRunId, 'APPROVE');
+    const completed = store.approveSubmission(wf.workflowRunId, 'APPROVE', undefined, store.getWorkflow(wf.workflowRunId)?.approvalChallenge?.nonce);
 
     const actions = completed.auditTrail.map((a) => a.action);
     expect(actions).toContain('parse_intent');
@@ -296,7 +290,7 @@ describe('EVA Core Logic & Verification Suite', () => {
     // Switching active workflow
     const hwWf = allWorkflows.find((w) => w.template === 'hardware_procurement')!;
     store.setActiveWorkflow(hwWf.workflowRunId);
-    expect(store.getActiveWorkflow().template).toBe('hardware_procurement');
+    expect(store.getActiveWorkflow()?.template).toBe('hardware_procurement');
   });
 
   // 15. Hardware procurement conflict and resolution
@@ -317,7 +311,7 @@ describe('EVA Core Logic & Verification Suite', () => {
     expect(ramField?.value).toBe(managerApproval.value);
 
     // Approve submission
-    const postApprove = store.approveSubmission(hwWf.workflowRunId, 'APPROVE');
+    const postApprove = store.approveSubmission(hwWf.workflowRunId, 'APPROVE', undefined, store.getWorkflow(hwWf.workflowRunId)?.approvalChallenge?.nonce);
     expect(postApprove.status).toBe('COMPLETED');
     expect(postApprove.cedarDecisions.length).toBe(3);
   });

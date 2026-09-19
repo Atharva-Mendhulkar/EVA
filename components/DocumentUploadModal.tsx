@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, CheckCircle2, AlertCircle, X, Shield, Lock, Loader2, Sparkles } from 'lucide-react';
 import { Evidence } from '@/lib/engine/types';
+import { apiFetch } from '@/lib/session/client';
 
 interface DocumentUploadModalProps {
   isOpen: boolean;
@@ -54,7 +55,7 @@ export function DocumentUploadModal({ isOpen, onClose, onUploadSuccess }: Docume
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/v1/vault/upload', {
+      const res = await apiFetch('/api/v1/vault/upload', {
         method: 'POST',
         body: formData
       });

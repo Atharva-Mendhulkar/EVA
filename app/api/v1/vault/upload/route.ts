@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { processDocumentUpload } from '@/lib/engine/ocr';
 import { DEMO_VAULT_DOCUMENTS } from '@/lib/engine/fixtures';
 import { DocumentMetadata } from '@/lib/engine/types';
+import { requireSession } from '@/lib/session/store';
 
 export async function POST(req: NextRequest) {
+  if (!requireSession(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
