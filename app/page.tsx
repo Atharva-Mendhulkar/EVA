@@ -816,7 +816,7 @@ export default function Page() {
                 ) : (
                   <>
                     {/* Operation Title / Target Header */}
-                    {workflow && (
+                    {workflow && workflow.template !== 'conversational' && (
                       <div className="mb-4 flex items-center justify-between pb-3 border-b border-white/5">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono text-white/40 uppercase tracking-wider">
