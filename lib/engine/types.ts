@@ -279,6 +279,8 @@ export interface WorkflowRun {
   formPopulationPlan?: FormPopulationPlan;
   approvalChallenge?: ApprovalChallenge;
   latestExplanation?: DecisionExplanation;
+  agentResponse?: string;
+  suggestions?: { title: string; prompt: string; template?: string }[];
   createdAt: string;
   updatedAt: string;
 }

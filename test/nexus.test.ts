@@ -326,4 +326,34 @@ describe('EVA Core Logic & Verification Suite', () => {
     expect(payoutWf.conflicts.length).toBe(1);
     expect(payoutWf.conflicts[0].field).toBe('ifsc_code');
   });
+
+  // 17. Conversational greeting produces rich agent response and workflow suggestions
+  it('17. Conversational greeting ("hi") produces orchestrator chat response and suggestions', () => {
+    const chatWf = store.createWorkflow('hi');
+    expect(chatWf.template).toBe('conversational');
+    expect(chatWf.title).toBe('EVA Orchestrator');
+    expect(chatWf.status).toBe('COMPLETED');
+    expect(chatWf.agentResponse).toBeDefined();
+    expect(chatWf.agentResponse).toContain('EVA');
+    expect(chatWf.suggestions).toBeDefined();
+    expect(chatWf.suggestions?.length).toBe(4);
+    expect(chatWf.plan.length).toBe(3);
+    expect(chatWf.plan[0].name).toBe('Understand conversational request');
+  });
+
+  // 18. Operational workflows update conversational agentResponse across lifecycle
+  it('18. Operational workflows update agentResponse across conflict and approval', () => {
+    const wf = store.createWorkflow("I'm starting an internship in Bangalore");
+    expect(wf.agentResponse).toContain('Contradiction Detected');
+
+    const conflict = wf.conflicts[0];
+    const evidenceChoice = conflict.candidateEvidence[0];
+    const resolved = store.resolveConflict(wf.workflowRunId, conflict.conflictId, evidenceChoice.evidenceId);
+    expect(resolved.agentResponse).toContain('Conflict resolved');
+    expect(resolved.agentResponse).toContain('Human Consent Gate Active');
+
+    const approved = store.approveSubmission(wf.workflowRunId, 'APPROVE', undefined, resolved.approvalChallenge?.nonce);
+    expect(approved.agentResponse).toContain('Submission to');
+    expect(approved.agentResponse).toContain('completed successfully');
+  });
 });

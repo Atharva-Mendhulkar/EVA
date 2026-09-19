@@ -1009,3 +1009,63 @@ button, textarea, input {
 .bottom-input::placeholder {
   color: var(--text-faint);
 }
+
+/* EVA Agent Conversational Response Card */
+.eva-response-card {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px 18px;
+  color: var(--text);
+  max-width: 90%;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  animation: evaCardFadeIn 0.25s ease-out;
+}
+
+@keyframes evaCardFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.eva-response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.eva-response-body {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.eva-response-body strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Popover Selection Menu for Tools & MCP */
+.popover-menu-container {
+  position: absolute;
+  z-index: 60;
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(16px);
+  width: 290px;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}

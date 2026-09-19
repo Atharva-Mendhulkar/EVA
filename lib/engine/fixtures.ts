@@ -225,6 +225,18 @@ export const TEMPLATES: Record<string, OperationTemplateConfig> = {
     conflictField: 'work_location',
     conflictDescription: 'No conflict detected for custom operation.',
     fieldSchema: []
+  },
+  conversational: {
+    templateId: 'conversational',
+    title: 'EVA Orchestrator',
+    category: 'custom',
+    defaultPrompt: 'Hello',
+    targetSystem: 'EVA Orchestrator (Reasoning & Dispatch)',
+    resourceName: 'Assistant::"eva_orchestrator"',
+    documentIds: [],
+    conflictField: 'full_name',
+    conflictDescription: 'Conversational orchestrator interaction.',
+    fieldSchema: []
   }
 };
 
@@ -232,6 +244,7 @@ export function getSeedEvidence(workflowRunId: string, templateId: string = 'int
   const now = Date.now();
 
   switch (templateId) {
+    case 'conversational':
     case 'custom_operation':
       return [];
     case 'hardware_procurement':

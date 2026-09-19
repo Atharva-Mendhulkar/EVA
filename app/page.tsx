@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowUp,
+  Check,
   CheckCircle2,
   History,
   Loader2,
@@ -34,6 +35,23 @@ import { Evidence, WorkflowRun } from '@/lib/engine/types';
 import { TEMPLATES } from '@/lib/engine/fixtures';
 import { apiFetch } from '@/lib/session/client';
 
+export const AVAILABLE_TOOLS = [
+  { id: 'cedar_pdp', name: 'Cedar Policy PDP', desc: 'Zero-trust authorization & invariant verification' },
+  { id: 'comparator', name: 'Deterministic Comparator', desc: 'Strict discrepancy & contradiction detection' },
+  { id: 'bedrock_extractor', name: 'Bedrock Fact Extractor', desc: 'Grounded extraction with hallucination guardrail' },
+  { id: 'playwright_executor', name: 'Playwright Browser', desc: 'Automated sandboxed web form execution' },
+  { id: 'audit_chain', name: 'SHA-256 Hash Auditor', desc: 'Immutable tamper-evident cryptographic ledger' },
+  { id: 'schema_inspector', name: 'Form Schema Inspector', desc: 'Autonomous field mapping & constraint analysis' }
+];
+
+export const AVAILABLE_MCP = [
+  { id: 'vault_mcp', name: 'Personal Vault MCP', desc: 'Encrypted personal credentials & document storage' },
+  { id: 'aws_bedrock_mcp', name: 'AWS Bedrock MCP', desc: 'Claude 3.5 Sonnet foundation model provider' },
+  { id: 'hr_sandbox_mcp', name: 'Enterprise HR MCP', desc: 'GreytHR & Workday operational test sandbox' },
+  { id: 'cedar_policy_mcp', name: 'Cedar Policy MCP', desc: 'Distributed authorization rules and schema store' },
+  { id: 'gov_registry_mcp', name: 'Civic Registry MCP', desc: 'Municipal portal & citizen clearance gateway' }
+];
+
 function StarrySky() {
   return (
     <div className="starry-background" aria-hidden="true">
@@ -63,18 +81,59 @@ export default function Page() {
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [followUpText, setFollowUpText] = useState('');
 
+  // Active run ID ref to completely prevent stale interval closures from redirecting chats
+  const activeRunIdRef = useRef<string | null>(null);
+
   // Chatbox In-Memory File Attachment & OCR states
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string; size: number; fingerprint: string; extractedCount: number }[]>([]);
   const [isUploadingInChat, setIsUploadingInChat] = useState(false);
 
-  // Chatbox Search, Form Filling, MCP, Tools capability toggles (start unhighlighted, click to highlight)
+  // Chatbox Search & Form Filling toggles
   const [enableSearch, setEnableSearch] = useState(false);
   const [enableFormFill, setEnableFormFill] = useState(false);
-  const [enableMcp, setEnableMcp] = useState(false);
-  const [enableTools, setEnableTools] = useState(false);
+
+  // Tools & MCP state with selection menus
+  const [selectedTools, setSelectedTools] = useState<string[]>([
+    'cedar_pdp', 'comparator', 'bedrock_extractor', 'playwright_executor', 'audit_chain'
+  ]);
+  const [selectedMcp, setSelectedMcp] = useState<string[]>([
+    'vault_mcp', 'aws_bedrock_mcp', 'hr_sandbox_mcp'
+  ]);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const [mcpMenuOpen, setMcpMenuOpen] = useState(false);
+  const [dockedToolsMenuOpen, setDockedToolsMenuOpen] = useState(false);
+  const [dockedMcpMenuOpen, setDockedMcpMenuOpen] = useState(false);
 
   const landingFileInputRef = React.useRef<HTMLInputElement>(null);
   const followUpFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const toggleTool = (toolId: string) => {
+    setSelectedTools((prev) =>
+      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]
+    );
+  };
+
+  const toggleAllTools = () => {
+    if (selectedTools.length === AVAILABLE_TOOLS.length) {
+      setSelectedTools([]);
+    } else {
+      setSelectedTools(AVAILABLE_TOOLS.map((t) => t.id));
+    }
+  };
+
+  const toggleMcp = (mcpId: string) => {
+    setSelectedMcp((prev) =>
+      prev.includes(mcpId) ? prev.filter((id) => id !== mcpId) : [...prev, mcpId]
+    );
+  };
+
+  const toggleAllMcp = () => {
+    if (selectedMcp.length === AVAILABLE_MCP.length) {
+      setSelectedMcp([]);
+    } else {
+      setSelectedMcp(AVAILABLE_MCP.map((m) => m.id));
+    }
+  };
 
   // Restore session-scoped workflow runs from sessionStorage
   useEffect(() => {
@@ -86,6 +145,10 @@ export default function Page() {
           if (Array.isArray(parsed)) {
             setSessionRunIds(parsed);
           }
+        }
+        const savedActiveRun = sessionStorage.getItem('eva_active_run');
+        if (savedActiveRun) {
+          activeRunIdRef.current = savedActiveRun;
         }
       } catch (err) {
         console.error('Failed to parse session runs:', err);
@@ -137,8 +200,8 @@ export default function Page() {
   // Fetch workflow state on mount and hydrate
   const fetchWorkflow = async (explicitRunId?: string) => {
     try {
-      // 1. Fetch active workflow scoped to current session or explicit selection
-      const targetId = explicitRunId || workflow?.workflowRunId || (sessionRunIds.length > 0 ? sessionRunIds[0] : null);
+      // 1. Fetch active workflow scoped to current selection or session
+      const targetId = explicitRunId || activeRunIdRef.current || (sessionRunIds.length > 0 ? sessionRunIds[0] : null);
 
       if (targetId) {
         const res = await apiFetch(`/api/v1/workflows/${targetId}`);
@@ -146,6 +209,10 @@ export default function Page() {
           const data: WorkflowRun | null = await res.json();
           if (data && data.workflowRunId) {
             setWorkflow(data);
+            activeRunIdRef.current = data.workflowRunId;
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('eva_active_run', data.workflowRunId);
+            }
             if (data.intent && !promptText && typeof window !== 'undefined' && sessionStorage.getItem('eva_started') === 'true') {
               setPromptText(data.intent);
             }
@@ -173,8 +240,10 @@ export default function Page() {
   };
 
   useEffect(() => {
-    fetchWorkflow();
-    const interval = setInterval(fetchWorkflow, 3500);
+    fetchWorkflow(activeRunIdRef.current || undefined);
+    const interval = setInterval(() => {
+      fetchWorkflow(activeRunIdRef.current || undefined);
+    }, 3500);
     return () => clearInterval(interval);
   }, []);
 
@@ -197,18 +266,24 @@ export default function Page() {
           userId: 'usr_eva_admin',
           enableSearch,
           enableFormFill,
-          enableMcp,
-          enableTools,
+          enableMcp: selectedMcp.length > 0,
+          enableTools: selectedTools.length > 0,
+          selectedTools,
+          selectedMcp,
           attachedDocumentIds: uploadedFiles.map((f) => f.id)
         })
       });
 
       if (res.ok) {
         const data: WorkflowRun = await res.json();
-        setWorkflow(data);
+        if (data && data.workflowRunId) {
+          setWorkflow(data);
 
-        // Record into this session's workflow runs
-        if (data.workflowRunId) {
+          // Record into this session's workflow runs
+          activeRunIdRef.current = data.workflowRunId;
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('eva_active_run', data.workflowRunId);
+          }
           setSessionRunIds((prev) => {
             const updated = prev.includes(data.workflowRunId) ? prev : [data.workflowRunId, ...prev];
             if (typeof window !== 'undefined') {
@@ -216,14 +291,14 @@ export default function Page() {
             }
             return updated;
           });
-        }
 
-        fetchWorkflow();
-        // Cinematic demo pause (750ms) before opening conflict card
-        if (data.conflicts && data.conflicts.length > 0 && data.status === 'AWAITING_USER_RESOLUTION') {
-          setTimeout(() => {
-            setShowConflictModal(true);
-          }, 750);
+          await fetchWorkflow(data.workflowRunId);
+          // Cinematic demo pause (750ms) before opening conflict card
+          if (data.conflicts && data.conflicts.length > 0 && data.status === 'AWAITING_USER_RESOLUTION') {
+            setTimeout(() => {
+              setShowConflictModal(true);
+            }, 750);
+          }
         }
       }
     } finally {
@@ -234,6 +309,11 @@ export default function Page() {
   const handleSelectWorkflow = async (runId: string) => {
     try {
       setIsLoading(true);
+      activeRunIdRef.current = runId;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('eva_active_run', runId);
+        sessionStorage.setItem('eva_started', 'true');
+      }
       const res = await apiFetch('/api/v1/workflows/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -245,16 +325,13 @@ export default function Page() {
         setWorkflow(active);
         setPromptText(active.intent);
         setStarted(true);
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('eva_started', 'true');
-        }
         setShowConflictModal(false);
         if (active.conflicts && active.conflicts.some((c) => c.status === 'open') && active.status === 'AWAITING_USER_RESOLUTION') {
           setTimeout(() => {
             setShowConflictModal(true);
           }, 400);
         }
-        fetchWorkflow();
+        await fetchWorkflow(runId);
       }
     } finally {
       setIsLoading(false);
@@ -269,16 +346,25 @@ export default function Page() {
   };
 
   const handleNewOperation = () => {
+    activeRunIdRef.current = null;
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('eva_started');
+      sessionStorage.removeItem('eva_active_run');
     }
     setStarted(false);
+    setWorkflow(null);
     setPromptText('');
     setShowConflictModal(false);
     setActiveTab('Answer');
   };
 
   const handleDeleteWorkflow = (runId: string) => {
+    if (activeRunIdRef.current === runId) {
+      activeRunIdRef.current = null;
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('eva_active_run');
+      }
+    }
     setSessionRunIds((prev) => {
       const updated = prev.filter((id) => id !== runId);
       if (typeof window !== 'undefined') {
@@ -300,7 +386,7 @@ export default function Page() {
 
   const handleResolveConflict = async (evidenceId: string, overrideVal?: string) => {
     if (!workflow) return;
-    const conflict = workflow.conflicts.find((c) => c.status === 'open') || workflow.conflicts[0];
+    const conflict = workflow.conflicts?.find((c) => c.status === 'open') || workflow.conflicts?.[0];
     if (!conflict) return;
 
     try {
@@ -369,13 +455,13 @@ export default function Page() {
 
   const handleInspectEvidence = (evidenceId: string) => {
     if (!workflow) return;
-    const ev = workflow.evidence.find((e) => e.evidenceId === evidenceId);
+    const ev = workflow.evidence?.find((e) => e.evidenceId === evidenceId);
     if (ev) {
       setSelectedEvidence(ev);
     }
   };
 
-  const openConflict = workflow?.conflicts.find((c) => c.status === 'open');
+  const openConflict = workflow?.conflicts?.find((c) => c.status === 'open');
   const latestCedar = workflow?.cedarDecisions?.[workflow.cedarDecisions.length - 1];
 
   return (
@@ -513,29 +599,123 @@ export default function Page() {
                       <span className="text-xs">Form Fill</span>
                     </button>
 
-                    {/* MCP (MCP icon) */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableMcp(!enableMcp)}
-                      className={`capsule-pill ${enableMcp ? 'active' : ''}`}
-                      title="Toggle Model Context Protocol (MCP)"
-                      aria-label="Toggle MCP"
-                    >
-                      <Cpu className="w-3.5 h-3.5" />
-                      <span className="text-xs">MCP</span>
-                    </button>
+                    {/* MCP Menu Toggle */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMcpMenuOpen(!mcpMenuOpen);
+                          setToolsMenuOpen(false);
+                        }}
+                        className={`capsule-pill ${selectedMcp.length > 0 ? 'active' : ''}`}
+                        title="Configure Model Context Protocol (MCP)"
+                        aria-label="Toggle MCP menu"
+                      >
+                        <Cpu className="w-3.5 h-3.5" />
+                        <span className="text-xs">MCP</span>
+                        {selectedMcp.length > 0 && (
+                          <span className="text-[10px] font-mono text-white/60 ml-0.5">({selectedMcp.length})</span>
+                        )}
+                      </button>
 
-                    {/* Tools (Tools icon) */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableTools(!enableTools)}
-                      className={`capsule-pill ${enableTools ? 'active' : ''}`}
-                      title="Toggle Agent Tools"
-                      aria-label="Toggle tools"
-                    >
-                      <Wrench className="w-3.5 h-3.5" />
-                      <span className="text-xs">Tools</span>
-                    </button>
+                      {mcpMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <Cpu className="w-3.5 h-3.5 text-white/70" />
+                              <span className="text-xs font-medium text-white">MCP Connectors</span>
+                              <span className="text-[10px] font-mono text-white/40">({selectedMcp.length}/{AVAILABLE_MCP.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={toggleAllMcp}
+                              className="text-[10px] font-mono text-white/60 hover:text-white transition px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/10"
+                            >
+                              {selectedMcp.length === AVAILABLE_MCP.length ? 'Clear' : 'All'}
+                            </button>
+                          </div>
+                          <div className="space-y-1">
+                            {AVAILABLE_MCP.map((m) => {
+                              const isChecked = selectedMcp.includes(m.id);
+                              return (
+                                <div
+                                  key={m.id}
+                                  onClick={() => toggleMcp(m.id)}
+                                  className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition select-none group"
+                                >
+                                  <div className={`mt-0.5 w-3.5 h-3.5 rounded border flex items-center justify-center transition shrink-0 ${isChecked ? 'bg-white border-white text-black' : 'border-white/30 group-hover:border-white/60'}`}>
+                                    {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-medium text-white">{m.name}</div>
+                                    <p className="text-[10px] text-white/50 leading-tight mt-0.5">{m.desc}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tools Menu Toggle */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToolsMenuOpen(!toolsMenuOpen);
+                          setMcpMenuOpen(false);
+                        }}
+                        className={`capsule-pill ${selectedTools.length > 0 ? 'active' : ''}`}
+                        title="Configure Agent Tools"
+                        aria-label="Toggle tools menu"
+                      >
+                        <Wrench className="w-3.5 h-3.5" />
+                        <span className="text-xs">Tools</span>
+                        {selectedTools.length > 0 && (
+                          <span className="text-[10px] font-mono text-white/60 ml-0.5">({selectedTools.length})</span>
+                        )}
+                      </button>
+
+                      {toolsMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <Wrench className="w-3.5 h-3.5 text-white/70" />
+                              <span className="text-xs font-medium text-white">Agent Tools</span>
+                              <span className="text-[10px] font-mono text-white/40">({selectedTools.length}/{AVAILABLE_TOOLS.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={toggleAllTools}
+                              className="text-[10px] font-mono text-white/60 hover:text-white transition px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/10"
+                            >
+                              {selectedTools.length === AVAILABLE_TOOLS.length ? 'Clear' : 'All'}
+                            </button>
+                          </div>
+                          <div className="space-y-1">
+                            {AVAILABLE_TOOLS.map((t) => {
+                              const isChecked = selectedTools.includes(t.id);
+                              return (
+                                <div
+                                  key={t.id}
+                                  onClick={() => toggleTool(t.id)}
+                                  className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition select-none group"
+                                >
+                                  <div className={`mt-0.5 w-3.5 h-3.5 rounded border flex items-center justify-center transition shrink-0 ${isChecked ? 'bg-white border-white text-black' : 'border-white/30 group-hover:border-white/60'}`}>
+                                    {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-medium text-white">{t.name}</div>
+                                    <p className="text-[10px] text-white/50 leading-tight mt-0.5">{t.desc}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <button
@@ -656,25 +836,65 @@ export default function Page() {
                       {promptText || workflow?.intent || 'Administrative Operation'}
                     </div>
 
+                    {/* EVA Agent Conversational Response Bubble on left */}
+                    {workflow?.agentResponse && (
+                      <div className="eva-response-card">
+                        <div className="eva-response-header">
+                          <div className="w-5 h-5 rounded bg-white/10 border border-white/20 flex items-center justify-center p-0.5">
+                            <img src="/logo.svg" alt="EVA" className="w-3.5 h-3.5 object-contain" />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-white tracking-wide">EVA</span>
+                            <span className="text-[10px] font-mono text-white/50 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                              {workflow.template === 'conversational' ? 'orchestrator' : (workflow.category ? `${workflow.category} agent` : 'agent')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="eva-response-body">
+                          {workflow.agentResponse}
+                        </div>
+
+                        {/* Interactive Suggestion Chips */}
+                        {workflow.suggestions && workflow.suggestions.length > 0 && (
+                          <div className="mt-3.5 pt-3 border-t border-white/10 flex flex-wrap gap-2">
+                            {workflow.suggestions.map((sug, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => handleStartWorkflow(sug.prompt, sug.template)}
+                                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-white/90 hover:text-white transition flex items-center gap-1.5 group"
+                              >
+                                <span>{sug.title}</span>
+                                <ArrowUp className="w-3 h-3 text-white/40 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Agent Thinking Progress Disclosure with 8-Phase Stepper */}
-                    <AgentProgress
-                      status={workflow?.status || 'PLANNING'}
-                      hasOpenConflict={Boolean(openConflict)}
-                      isHumanApproved={workflow?.status === 'COMPLETED'}
-                      fieldsCount={workflow?.formFields.length || 0}
-                      isExecuting={isLoading}
-                      plan={workflow?.plan}
-                      stepIndex={workflow?.stepIndex}
-                    />
+                    {workflow?.template !== 'conversational' && (
+                      <AgentProgress
+                        status={workflow?.status || 'PLANNING'}
+                        hasOpenConflict={Boolean(openConflict)}
+                        isHumanApproved={workflow?.status === 'COMPLETED'}
+                        fieldsCount={workflow?.formFields?.length || 0}
+                        isExecuting={isLoading}
+                        plan={workflow?.plan}
+                        stepIndex={workflow?.stepIndex}
+                      />
+                    )}
 
                     {/* Conflict Notice if modal is closed */}
-                    {openConflict && !showConflictModal && (
+                    {openConflict && !showConflictModal && workflow?.template !== 'conversational' && (
                       <div className="p-3.5 rounded-xl border border-white/20 bg-white/5 mb-4 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-white animate-ping" />
                           <span className="text-white/90 font-mono">
-                            {openConflict.field.replace(/_/g, ' ')} conflict pending:{' '}
-                            {openConflict.candidateEvidence.map((e) => e.value).join(' vs. ')}
+                            {openConflict.field?.replace(/_/g, ' ') || 'field'} conflict pending:{' '}
+                            {openConflict.candidateEvidence?.map((e) => e.value).join(' vs. ') || ''}
                           </span>
                         </div>
                         <button
@@ -688,7 +908,7 @@ export default function Page() {
                     )}
 
                     {/* Form Populating / Executing Card */}
-                    {workflow && workflow.formFields.length > 0 && (
+                    {workflow && (workflow.formFields?.length ?? 0) > 0 && (
                       <MockFormExecution
                         fields={workflow.formFields}
                         onInspectEvidence={handleInspectEvidence}
@@ -702,7 +922,7 @@ export default function Page() {
                     {latestCedar && <CedarInspector decision={latestCedar} />}
 
                     {/* Causal Explainability */}
-                    {workflow?.latestExplanation && (
+                    {workflow?.latestExplanation && workflow.template !== 'conversational' && (
                       <DecisionExplanationCard
                         explanation={workflow.latestExplanation}
                         onViewEvidence={handleInspectEvidence}
@@ -717,8 +937,8 @@ export default function Page() {
                       />
                     )}
 
-                    {/* Workflow Complete Banner */}
-                    {workflow?.status === 'COMPLETED' && (
+                    {/* Workflow Complete Banner (only for operational workflows, not conversational discovery) */}
+                    {workflow?.status === 'COMPLETED' && workflow.template !== 'conversational' && (
                       <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -822,27 +1042,115 @@ export default function Page() {
                       <ClipboardList className="w-4 h-4" />
                     </button>
 
-                    {/* MCP Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableMcp(!enableMcp)}
-                      className={`docked-cap-btn ${enableMcp ? 'active' : ''}`}
-                      title="Toggle Model Context Protocol (MCP)"
-                      aria-label="MCP"
-                    >
-                      <Cpu className="w-4 h-4" />
-                    </button>
+                    {/* MCP Menu Toggle */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDockedMcpMenuOpen(!dockedMcpMenuOpen);
+                          setDockedToolsMenuOpen(false);
+                        }}
+                        className={`docked-cap-btn ${selectedMcp.length > 0 ? 'active' : ''}`}
+                        title="Configure Model Context Protocol (MCP)"
+                        aria-label="MCP"
+                      >
+                        <Cpu className="w-4 h-4" />
+                      </button>
 
-                    {/* Tools Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableTools(!enableTools)}
-                      className={`docked-cap-btn ${enableTools ? 'active' : ''}`}
-                      title="Toggle Agent Tools"
-                      aria-label="Tools"
-                    >
-                      <Wrench className="w-4 h-4" />
-                    </button>
+                      {dockedMcpMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-3 left-0">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <Cpu className="w-3.5 h-3.5 text-white/70" />
+                              <span className="text-xs font-medium text-white">MCP Connectors</span>
+                              <span className="text-[10px] font-mono text-white/40">({selectedMcp.length}/{AVAILABLE_MCP.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={toggleAllMcp}
+                              className="text-[10px] font-mono text-white/60 hover:text-white transition px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/10"
+                            >
+                              {selectedMcp.length === AVAILABLE_MCP.length ? 'Clear' : 'All'}
+                            </button>
+                          </div>
+                          <div className="space-y-1">
+                            {AVAILABLE_MCP.map((m) => {
+                              const isChecked = selectedMcp.includes(m.id);
+                              return (
+                                <div
+                                  key={m.id}
+                                  onClick={() => toggleMcp(m.id)}
+                                  className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition select-none group"
+                                >
+                                  <div className={`mt-0.5 w-3.5 h-3.5 rounded border flex items-center justify-center transition shrink-0 ${isChecked ? 'bg-white border-white text-black' : 'border-white/30 group-hover:border-white/60'}`}>
+                                    {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-medium text-white">{m.name}</div>
+                                    <p className="text-[10px] text-white/50 leading-tight mt-0.5">{m.desc}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tools Menu Toggle */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDockedToolsMenuOpen(!dockedToolsMenuOpen);
+                          setDockedMcpMenuOpen(false);
+                        }}
+                        className={`docked-cap-btn ${selectedTools.length > 0 ? 'active' : ''}`}
+                        title="Configure Agent Tools"
+                        aria-label="Tools"
+                      >
+                        <Wrench className="w-4 h-4" />
+                      </button>
+
+                      {dockedToolsMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-3 left-0">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <Wrench className="w-3.5 h-3.5 text-white/70" />
+                              <span className="text-xs font-medium text-white">Agent Tools</span>
+                              <span className="text-[10px] font-mono text-white/40">({selectedTools.length}/{AVAILABLE_TOOLS.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={toggleAllTools}
+                              className="text-[10px] font-mono text-white/60 hover:text-white transition px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 border border-white/10"
+                            >
+                              {selectedTools.length === AVAILABLE_TOOLS.length ? 'Clear' : 'All'}
+                            </button>
+                          </div>
+                          <div className="space-y-1">
+                            {AVAILABLE_TOOLS.map((t) => {
+                              const isChecked = selectedTools.includes(t.id);
+                              return (
+                                <div
+                                  key={t.id}
+                                  onClick={() => toggleTool(t.id)}
+                                  className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition select-none group"
+                                >
+                                  <div className={`mt-0.5 w-3.5 h-3.5 rounded border flex items-center justify-center transition shrink-0 ${isChecked ? 'bg-white border-white text-black' : 'border-white/30 group-hover:border-white/60'}`}>
+                                    {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-medium text-white">{t.name}</div>
+                                    <p className="text-[10px] text-white/50 leading-tight mt-0.5">{t.desc}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <input
                       type="text"

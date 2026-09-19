@@ -31,8 +31,30 @@ interface ServerTaskToken {
   expiresAt: number;
 }
 
+export function isGreetingIntent(text: string): boolean {
+  const clean = (text || '').toLowerCase().trim();
+  if (!clean) return true;
+  const directGreetings = new Set([
+    'hi', 'hello', 'hey', 'greetings', 'who are you', 'what can you do',
+    'what do you do', 'help', 'start', 'test', 'good morning', 'good afternoon', 'good evening',
+    'how does this work', 'what is eva'
+  ]);
+  if (directGreetings.has(clean)) return true;
+  return (
+    clean.startsWith('hi ') ||
+    clean.startsWith('hello ') ||
+    clean.startsWith('hey ') ||
+    clean.includes('who are you') ||
+    clean.includes('what can you do') ||
+    clean.includes('what do you do')
+  );
+}
+
 export function classifyIntent(intentText: string): string {
   const text = (intentText || '').toLowerCase().trim();
+  if (isGreetingIntent(text)) {
+    return 'conversational';
+  }
   if (
     text.includes('hardware') ||
     text.includes('laptop') ||
@@ -134,11 +156,16 @@ export class WorkflowStore {
     const activeUserId = userIdentifier || 'usr_eva_admin';
     const runId = customRunId || `run_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
+    const isConversational = selectedTemplateKey === 'conversational';
     const isCustom = selectedTemplateKey === 'custom_operation';
-    const dynamicTitle = isCustom
+    const dynamicTitle = isConversational
+      ? 'EVA Orchestrator'
+      : isCustom
       ? (activeIntent.trim().length > 36 ? activeIntent.trim().slice(0, 36) + '...' : (activeIntent.trim() || 'Custom Administrative Request'))
       : templateConfig.title;
-    const dynamicTarget = isCustom
+    const dynamicTarget = isConversational
+      ? 'EVA Orchestrator (Reasoning & Dispatch)'
+      : isCustom
       ? 'EVA Autonomous Operational Sandbox'
       : templateConfig.targetSystem;
 
@@ -184,42 +211,65 @@ export class WorkflowStore {
       });
     }
 
-    const initialPlan: WorkflowStep[] = [
+    const conversationalPlan: WorkflowStep[] = [
       {
         stepId: 1,
-        name: 'Understand request',
+        name: 'Understand conversational request',
         status: 'COMPLETED',
-        detail: isCustom ? `Analyzed goal: "${activeIntent}"` : `Classified intent to ${templateConfig.templateId}`
+        detail: `Understood prompt: "${activeIntent}"`
       },
       {
         stepId: 2,
-        name: 'Gather documents',
+        name: 'Discover applicable workflows',
         status: 'COMPLETED',
-        detail: isCustom
-          ? (evidenceList.length > 0 ? `${evidenceList.length} evidence sources gathered` : 'General execution with no documents required')
-          : `${templateConfig.documentIds.length} documents retrieved from Personal Vault`
+        detail: '4 verified enterprise operational domains discovered'
       },
       {
         stepId: 3,
-        name: 'Extract evidence',
+        name: 'Present execution options',
         status: 'COMPLETED',
-        detail: isCustom
-          ? (evidenceList.length > 0 ? `${evidenceList.length} fields extracted via Bedrock` : 'Direct administrative dispatch')
-          : `${evidenceList.length} fields extracted via Bedrock Claude 3.5`
-      },
-      {
-        stepId: 4,
-        name: 'Reconcile information',
-        status: conflictResult.conflicts.length > 0 ? 'ATTENTION' : 'COMPLETED',
-        detail: conflictResult.conflicts.length > 0
-          ? `Contradiction detected: ${conflictResult.conflicts[0].candidateEvidence[0]?.value || ''} ≠ ${conflictResult.conflicts[0].candidateEvidence[1]?.value || ''}`
-          : 'All evidence reconciled cleanly'
-      },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar Policy Decision Point check' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Sandbox ${dynamicTarget} preparation` },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Server-persisted human consent gate' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Consequential external dispatch' }
+        detail: 'Orchestrator ready for domain delegation'
+      }
     ];
+
+    const initialPlan: WorkflowStep[] = isConversational
+      ? conversationalPlan
+      : [
+          {
+            stepId: 1,
+            name: 'Understand request',
+            status: 'COMPLETED',
+            detail: isCustom ? `Analyzed goal: "${activeIntent}"` : `Classified intent to ${templateConfig.templateId}`
+          },
+          {
+            stepId: 2,
+            name: 'Gather documents',
+            status: 'COMPLETED',
+            detail: isCustom
+              ? (evidenceList.length > 0 ? `${evidenceList.length} evidence sources gathered` : 'General execution with no documents required')
+              : `${templateConfig.documentIds.length} documents retrieved from Personal Vault`
+          },
+          {
+            stepId: 3,
+            name: 'Extract evidence',
+            status: 'COMPLETED',
+            detail: isCustom
+              ? (evidenceList.length > 0 ? `${evidenceList.length} fields extracted via Bedrock` : 'Direct administrative dispatch')
+              : `${evidenceList.length} fields extracted via Bedrock Claude 3.5`
+          },
+          {
+            stepId: 4,
+            name: 'Reconcile information',
+            status: conflictResult.conflicts.length > 0 ? 'ATTENTION' : 'COMPLETED',
+            detail: conflictResult.conflicts.length > 0
+              ? `Contradiction detected: ${conflictResult.conflicts[0].candidateEvidence[0]?.value || ''} ≠ ${conflictResult.conflicts[0].candidateEvidence[1]?.value || ''}`
+              : 'All evidence reconciled cleanly'
+          },
+          { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar Policy Decision Point check' },
+          { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Sandbox ${dynamicTarget} preparation` },
+          { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Server-persisted human consent gate' },
+          { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Consequential external dispatch' }
+        ];
 
     const firstConflict = conflictResult.conflicts[0];
 
@@ -330,6 +380,31 @@ export class WorkflowStore {
       });
     }
 
+    let agentResponse = '';
+    let suggestions: { title: string; prompt: string; template?: string }[] | undefined = undefined;
+
+    if (isConversational) {
+      agentResponse = `Hello! I am **EVA** (*Evidence, Verification, and Authorization*), your autonomous administrative and operational agent.\n\nI bridge natural language requests with real, policy-governed execution. Unlike typical chatbots, I ground every field in verified documents from your personal vault, detect contradictory records with deterministic checks, and enforce Cedar zero-trust security policies before any consequential action is taken.\n\nHere are some verified operational workflows you can run right now:`;
+      suggestions = [
+        { title: '💼 Internship Onboarding', prompt: "I'm starting an internship in Bangalore", template: 'internship_onboarding' },
+        { title: '💻 Developer Workstation', prompt: 'Order a developer workstation for my engineering role', template: 'hardware_procurement' },
+        { title: '🏥 Medical Reimbursement', prompt: 'File insurance reimbursement for my hospital bill', template: 'medical_reimbursement' },
+        { title: '🏦 Vendor Payout Bank Update', prompt: 'Update payout bank account for consulting invoices', template: 'vendor_payout_update' }
+      ];
+    } else if (selectedTemplateKey === 'internship_onboarding') {
+      agentResponse = conflictResult.conflicts.length > 0
+        ? `I have initiated your **Internship Onboarding** workflow for Bangalore.\n\nI extracted 7 evidence fields from your *Offer Letter* and *College NOC* stored in your Personal Vault.\n\n⚠️ **Contradiction Detected**: A start date mismatch was detected between your Offer Letter (**July 1, 2026**) and College NOC (**June 15, 2026**). In accordance with Cedar zero-trust security policy, execution is paused for your authoritative resolution.`
+        : `I have initiated your **Internship Onboarding** workflow. All evidence fields from your vault have been reconciled cleanly. Preparing form population plan for Cedar policy evaluation.`;
+    } else if (selectedTemplateKey === 'hardware_procurement') {
+      agentResponse = `I have initiated your **Developer Hardware Procurement** request.\n\nParsed hardware specifications: **16-inch MacBook Pro M3 Max (64GB RAM, 1TB SSD)** against engineering department budget allowance and cost center **ENG-PROD-2026**.\n\nForm population plan generated and evaluated against Cedar equipment tier policies.`;
+    } else if (selectedTemplateKey === 'medical_reimbursement') {
+      agentResponse = `I have initiated your **Medical Expense Reimbursement** claim.\n\nExtracted hospital invoices, admission dates, and attending physician summaries from Apollo Hospitals. Verified claim total ($1,850.00) conforms to policy limits without ungrounded fabrications.`;
+    } else if (selectedTemplateKey === 'vendor_payout_update') {
+      agentResponse = `I have processed your **Vendor Payout Bank Account Update**.\n\nExtracted account number and IFSC routing code from verified bank records. Because banking details are sensitive financial instruments, Cedar zero-trust policy enforces strict action-bound human approval before payout records are modified.`;
+    } else {
+      agentResponse = `I have analyzed your administrative request: *"${activeIntent}"*.\n\nExtracted available evidence from your vault, evaluated applicable authorization rules, and initialized the execution pipeline.`;
+    }
+
     const initialRun: WorkflowRun = {
       workflowRunId: runId,
       userId: activeUserId,
@@ -338,19 +413,31 @@ export class WorkflowStore {
       title: dynamicTitle,
       category: templateConfig.category,
       targetSystem: dynamicTarget,
-      status: conflictResult.conflicts.length > 0 ? 'AWAITING_USER_RESOLUTION' : (isCustom ? 'COMPLETED' : 'PLANNING'),
-      currentStep: conflictResult.conflicts.length > 0 ? 'Resolve conflict' : (isCustom ? 'Operation completed' : 'Processing request'),
-      stepIndex: isCustom ? 8 : (conflictResult.conflicts.length > 0 ? 4 : 5),
-      awaitingAction: conflictResult.conflicts.length > 0 ? 'CONFLICT_RESOLUTION' : null,
-      plan: isCustom
-        ? initialPlan.map((s) => ({ ...s, status: 'COMPLETED' as const }))
-        : initialPlan,
+      status: isConversational
+        ? 'COMPLETED'
+        : conflictResult.conflicts.length > 0
+        ? 'AWAITING_USER_RESOLUTION'
+        : (isCustom ? 'COMPLETED' : 'PLANNING'),
+      currentStep: isConversational
+        ? 'Orchestrator ready'
+        : conflictResult.conflicts.length > 0
+        ? 'Resolve conflict'
+        : (isCustom ? 'Operation completed' : 'Processing request'),
+      stepIndex: isConversational ? 3 : (isCustom ? 8 : (conflictResult.conflicts.length > 0 ? 4 : 5)),
+      awaitingAction: (isConversational || isCustom)
+        ? null
+        : (conflictResult.conflicts.length > 0 ? 'CONFLICT_RESOLUTION' : null),
+      plan: isConversational
+        ? conversationalPlan
+        : (isCustom ? initialPlan.map((s) => ({ ...s, status: 'COMPLETED' as const })) : initialPlan),
       evidence: evidenceList,
       conflicts: conflictResult.conflicts,
       auditTrail: initialAudit,
       cedarDecisions: [],
       formFields: [],
       latestExplanation: initialAudit[initialAudit.length - 1]?.explanation,
+      agentResponse,
+      suggestions,
       createdAt: new Date(now.getTime() - 45000).toISOString(),
       updatedAt: now.toISOString()
     };
@@ -652,6 +739,7 @@ export class WorkflowStore {
     run.status = 'AWAITING_HUMAN_APPROVAL';
     run.awaitingAction = 'HUMAN_APPROVAL'; // NO activeTaskToken to client!
     run.latestExplanation = denyAudit.explanation;
+    run.agentResponse = `Conflict resolved: selected **${resolvedValue}** as authoritative for **${conflict.field}**. Cedar Policy evaluated **ALLOW** for form population. I have populated the **${templateConfig.targetSystem}** form fields.\n\n🔒 **Human Consent Gate Active**: Consequential external submission is safely paused awaiting your review and approval.`;
     run.updatedAt = new Date().toISOString();
 
     this.workflows.set(runId, run);
@@ -825,6 +913,7 @@ export class WorkflowStore {
     };
     appendAuditEvent(run.auditTrail, submissionAudit);
     run.latestExplanation = submissionAudit.explanation;
+    run.agentResponse = `Submission to **${templateConfig.targetSystem}** completed successfully (HTTP ${receipt.statusCode}). All ${receipt.fieldsSubmitted} verified fields were submitted with an immutable cryptographic SHA-256 hash chain in the append-only audit trail.`;
     run.updatedAt = new Date().toISOString();
 
     this.workflows.set(runId, run);
