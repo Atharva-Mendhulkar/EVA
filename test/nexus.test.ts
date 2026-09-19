@@ -10,6 +10,7 @@ describe('EVA Core Logic & Verification Suite', () => {
 
   beforeEach(() => {
     store = new WorkflowStore();
+    store.seedInitialWorkflows();
   });
 
   // 1. Conflict detection: Mumbai vs Bangalore -> conflict

@@ -164,8 +164,10 @@ export function MockFormExecution({
               <Lock className="w-3 h-3 text-emerald-400 flex-none" />
               <span className="text-zinc-500 select-none">https://</span>
               <span className="text-zinc-200 truncate">
-                {isGoogleForm
-                  ? 'docs.google.com/forms/d/e/1FAIpQLSdX4_AcmeCorp/viewform'
+                {targetSystem.includes('http')
+                  ? targetSystem.replace(/^.*https?:\/\//i, '').replace(/\).*$/, '')
+                  : isGoogleForm
+                  ? 'docs.google.com/forms/d/e/live-form/viewform'
                   : `portal.internal.corp/${targetSystem.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/form`}
               </span>
               <span className="ml-auto text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
@@ -232,20 +234,32 @@ export function MockFormExecution({
                         {field.label}
                       </label>
                       <span className="text-[10px] font-mono text-zinc-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
-                        #{field.fieldId}
+                        {field.entryName ? field.entryName : `#${field.fieldId}`}
                       </span>
                     </div>
 
                     <div className="relative flex items-center">
-                      <input
-                        type="text"
-                        readOnly
-                        value={isFilled ? displayVal : ''}
-                        placeholder={isFilled ? '' : 'Autonomous agent typing...'}
-                        className={`w-full bg-[#18181f] border rounded px-3 py-2 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none transition ${
-                          isCurrentTyping ? 'border-white/40' : 'border-white/10'
-                        }`}
-                      />
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          readOnly
+                          rows={2}
+                          value={isFilled ? displayVal : ''}
+                          placeholder={isFilled ? '' : 'Autonomous agent typing...'}
+                          className={`w-full bg-[#18181f] border rounded px-3 py-2 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none transition resize-none ${
+                            isCurrentTyping ? 'border-white/40' : 'border-white/10'
+                          }`}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          readOnly
+                          value={isFilled ? displayVal : ''}
+                          placeholder={isFilled ? '' : 'Autonomous agent typing...'}
+                          className={`w-full bg-[#18181f] border rounded px-3 py-2 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none transition ${
+                            isCurrentTyping ? 'border-white/40' : 'border-white/10'
+                          }`}
+                        />
+                      )}
                       {isCurrentTyping && (
                         <span className="absolute right-3 w-1.5 h-3.5 bg-white animate-pulse inline-block" />
                       )}

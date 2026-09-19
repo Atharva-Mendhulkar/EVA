@@ -904,8 +904,36 @@ export default function Page() {
                 </div>
               </div>
 
+              {/* Dynamic Capability Quick Suggestions */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
+                <button
+                  type="button"
+                  onClick={() => setPromptText('https://docs.google.com/forms/d/e/1FAIpQLSc_application_demo/viewform fill this form for me')}
+                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 font-mono flex items-center gap-1.5 transition"
+                >
+                  <ClipboardList className="w-3.5 h-3.5 text-[#a78bfa]" />
+                  <span>Fill Google Form Link</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPromptText('Search the web for remote engineering equipment stipend benchmarks in 2026')}
+                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 font-mono flex items-center gap-1.5 transition"
+                >
+                  <Globe className="w-3.5 h-3.5 text-[#38bdf8]" />
+                  <span>Web Intelligence Search</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPromptText('Hello EVA, what administrative operations can you run for me?')}
+                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 font-mono flex items-center gap-1.5 transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#34d399]" />
+                  <span>Ask EVA Anything</span>
+                </button>
+              </div>
+
               <p className="text-[11px] text-zinc-500 mt-8 font-mono">
-                Evidence before action · AWS Serverless · 16 Shooting Stars Active
+                Evidence before action · Dynamic Form Filing · AWS Serverless · 16 Shooting Stars
               </p>
             </main>
           ) : (

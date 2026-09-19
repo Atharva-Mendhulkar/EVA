@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import { sessionStore } from '../lib/session/store';
 import { workflowStore } from '../lib/engine/state-machine';
@@ -15,6 +15,10 @@ import { POST as createSessionPost } from '../app/api/v1/sessions/route';
 import { DELETE as revokeSessionDelete } from '../app/api/v1/sessions/[id]/route';
 
 describe('PRD Section 13 API Endpoints & Handlers', () => {
+  beforeAll(() => {
+    workflowStore.seedInitialWorkflows();
+  });
+
   const { record, sessionSecret } = sessionStore.createSession();
   const authHeaders = {
     'X-EVA-Session-Id': record.sessionId,

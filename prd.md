@@ -952,3 +952,19 @@ EVA supports a dual deployment model designed for both frictionless hackathon ev
    - **Intelligence:** Amazon Bedrock (`anthropic.claude-3-5-sonnet` with Bedrock Guardrails).
    - **Storage & Security:** Amazon DynamoDB (single-table session & metadata store with TTL) + Amazon S3 with AWS KMS client-side envelope encryption (`sse-kms`).
    - **Authorization:** AWS Cedar Policy Decision Point (PDP).
+
+---
+
+## 21. Dynamic Forms & Open-Ended Form Execution Subsystem
+
+### 21.1 Real-Time Google Forms & Web Form Ingestion
+EVA provides first-class support for arbitrary, open-ended web forms and live Google Forms without requiring pre-configured templates or hardcoded schemas:
+1. **Dynamic URL Discovery:** Users can send any Google Form link (`docs.google.com/forms/d/e/.../viewform` or shortlink `forms.gle/...`) or generic web form URL in natural language prompts.
+2. **`FB_PUBLIC_LOAD_DATA_` Parser:** The ingestion module (`lib/engine/form-parser.ts`) extracts the embedded Google Forms state machine JSON payload, discovering question IDs, titles, descriptions, widget types (text, textarea, radio, dropdown, checkbox), entry names (`entry.XXXXXXXXX`), and form response submission endpoints (`/formResponse`).
+3. **Semantic Grounding against Personal Vault:** The dynamic matcher (`lib/engine/dynamic-matcher.ts`) semantically scores discovered form questions against verified documents in the user's Personal Vault (such as Offer Letters, College NOCs, Resumes, Passports, and Financial Cheques).
+4. **Deterministic Contradiction Gating:** If a discovered form field (such as Work Location) has contradictory candidate records across documents, EVA automatically blocks form population and raises an interactive Cedar Conflict Resolution Gate.
+5. **Action-Bound Nonce Approval & Consequential Submission:** Once the form is populated in the sandbox, Cedar strictly denies external submission (`human_approved = false`). Upon explicit human consent bound to the cryptographic state hash, EVA submits the urlencoded payload (`entry.XXXX=value`) to the live Google Form endpoint or target endpoint.
+
+### 21.2 Clean Session Boot Principle
+- To guarantee zero pre-seeded clutter and complete user autonomy, EVA's runtime initializes with **zero hardcoded workflows**.
+- Sessions start on an unpolluted canvas, allowing users to ask questions, perform real-time web research, or provide arbitrary web forms on demand.

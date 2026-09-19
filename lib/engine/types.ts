@@ -1,7 +1,7 @@
 // EVA Core Domain & Engine Types
 // Central Product Principle: EVIDENCE -> RECONCILIATION -> AUTHORIZATION -> ACTION -> AUDIT
 
-export type CanonicalField =
+export type WellKnownCanonicalField =
   // Onboarding
   | 'full_name'
   | 'university'
@@ -31,6 +31,28 @@ export type CanonicalField =
   | 'payout_currency'
   // Negative test field
   | 'bank_account_number';
+
+export type CanonicalField = WellKnownCanonicalField | (string & {});
+
+export interface FormQuestion {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'text' | 'textarea' | 'radio' | 'checkbox' | 'dropdown' | 'other';
+  entryName?: string; // e.g. "entry.1849201"
+  options?: string[];
+  required: boolean;
+}
+
+export interface ParsedFormSchema {
+  formId: string;
+  title: string;
+  description?: string;
+  actionUrl: string;
+  questions: FormQuestion[];
+  isGoogleForm: boolean;
+  rawUrl: string;
+}
 
 export type ProvenanceStatus = 'SOURCE_BACKED' | 'USER_ASSERTED' | 'SYSTEM_DERIVED';
 
@@ -245,6 +267,10 @@ export interface FormField {
   evidenceId: string;
   userConfirmed?: boolean;
   status: 'empty' | 'populating' | 'verified';
+  entryName?: string; // e.g. "entry.1849201"
+  type?: 'text' | 'textarea' | 'radio' | 'checkbox' | 'dropdown' | 'other';
+  options?: string[];
+  required?: boolean;
 }
 
 export type OperationCategory =
@@ -280,6 +306,7 @@ export interface WorkflowRun {
   approvalChallenge?: ApprovalChallenge;
   latestExplanation?: DecisionExplanation;
   agentResponse?: string;
+  parsedFormSchema?: ParsedFormSchema;
   suggestions?: { title: string; prompt: string; template?: string }[];
   createdAt: string;
   updatedAt: string;

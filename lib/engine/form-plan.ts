@@ -12,10 +12,19 @@ export interface FieldResolution {
   confidence: number;
 }
 
+export interface FormFieldSchemaItem {
+  field: CanonicalField;
+  label: string;
+  entryName?: string;
+  type?: FormField['type'];
+  options?: string[];
+  required?: boolean;
+}
+
 export function buildPopulationPlan(
   formId: string,
   workflowRunId: string,
-  schema: { field: CanonicalField; label: string }[],
+  schema: FormFieldSchemaItem[],
   evidence: Evidence[],
   resolutions: Partial<Record<CanonicalField, FieldResolution>> = {},
   agentVersion = 'eva-form-filling/1.0'
@@ -33,7 +42,11 @@ export function buildPopulationPlan(
         confidence: resolution.confidence,
         evidenceId: resolution.evidenceId,
         userConfirmed: true,
-        status: 'verified' as const
+        status: 'verified' as const,
+        entryName: item.entryName,
+        type: item.type,
+        options: item.options,
+        required: item.required,
       };
     }
     const ev = evidence.find((e) => e.field === item.field);
@@ -46,7 +59,11 @@ export function buildPopulationPlan(
       sourceLocation: ev ? ev.sourceLocation : 'Section 1',
       confidence: ev ? ev.confidence : 0.95,
       evidenceId: ev ? ev.evidenceId : `ev_${item.field}_${workflowRunId}`,
-      status: 'verified' as const
+      status: 'verified' as const,
+      entryName: item.entryName,
+      type: item.type,
+      options: item.options,
+      required: item.required,
     };
   });
 
