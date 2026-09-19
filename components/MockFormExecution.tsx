@@ -23,6 +23,7 @@ interface MockFormExecutionProps {
   fields: FormField[];
   onInspectEvidence: (evidenceId: string) => void;
   isSubmitting?: boolean;
+  isHumanApproved?: boolean;
   targetSystem?: string;
   title?: string;
 }
@@ -31,6 +32,7 @@ export function MockFormExecution({
   fields,
   onInspectEvidence,
   isSubmitting,
+  isHumanApproved,
   targetSystem = 'Acme Cloud Systems · HR Onboarding Endpoint',
   title = 'Enterprise Operations Execution Form'
 }: MockFormExecutionProps) {
@@ -40,23 +42,37 @@ export function MockFormExecution({
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
 
+  const fieldsSignature = fields.map((f) => `${f.fieldId}:${f.value}`).join('|');
+  const hasAnimatedRef = React.useRef<string | null>(null);
+
   // Smooth form filling animation: reveals fields sequentially with agent typing simulation
+  // STOPS permanently once complete and does NOT continuously loop on background re-polling
   useEffect(() => {
     if (fields.length === 0) return;
+    if (hasAnimatedRef.current === fieldsSignature) {
+      setFilledIndices(fields.map((_, i) => i));
+      return;
+    }
+
+    hasAnimatedRef.current = fieldsSignature;
     setFilledIndices([]);
 
     const timers: NodeJS.Timeout[] = [];
     fields.forEach((_, idx) => {
       const timer = setTimeout(() => {
-        setFilledIndices((prev) => [...prev, idx]);
-      }, (idx + 1) * 140);
+        setFilledIndices((prev) => (prev.includes(idx) ? prev : [...prev, idx]));
+      }, (idx + 1) * 110);
       timers.push(timer);
     });
 
     return () => timers.forEach(clearTimeout);
-  }, [fields]);
+  }, [fieldsSignature, fields.length]);
 
   const isComplete = filledIndices.length === fields.length;
+
+  const isGoogleForm =
+    targetSystem.toLowerCase().includes('google') ||
+    title.toLowerCase().includes('google');
 
   const handleValueChange = (fieldId: string, val: string) => {
     setEditedValues((prev) => ({ ...prev, [fieldId]: val }));
@@ -148,7 +164,9 @@ export function MockFormExecution({
               <Lock className="w-3 h-3 text-emerald-400 flex-none" />
               <span className="text-zinc-500 select-none">https://</span>
               <span className="text-zinc-200 truncate">
-                portal.internal.corp/{targetSystem.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/form
+                {isGoogleForm
+                  ? 'docs.google.com/forms/d/e/1FAIpQLSdX4_AcmeCorp/viewform'
+                  : `portal.internal.corp/${targetSystem.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/form`}
               </span>
               <span className="ml-auto text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
                 TLS 1.3
@@ -158,19 +176,29 @@ export function MockFormExecution({
             {/* Agent Playwright Status */}
             <div className="flex items-center gap-1.5 text-[11px] font-mono text-white/70 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
-              <span>Playwright Driver Active</span>
+              <span>{isGoogleForm ? 'Google Forms Automation Driver' : 'Playwright Driver Active'}</span>
             </div>
           </div>
 
           {/* Web Document Body */}
           <div className="p-6 space-y-4 bg-gradient-to-b from-[#0f0f13] to-[#0a0a0c]">
+            {isGoogleForm && (
+              <div className="h-2 -mt-6 -mx-6 bg-[#673ab7] rounded-t-sm shadow-sm" />
+            )}
             <div className="pb-3 border-b border-white/10 flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-semibold text-white tracking-wide">
-                  {title}
+                <h4 className="text-sm font-semibold text-white tracking-wide flex items-center gap-2">
+                  <span>{title}</span>
+                  {isGoogleForm && (
+                    <span className="text-[10px] font-mono bg-[#673ab7]/30 text-[#d1c4e9] border border-[#673ab7]/50 px-2 py-0.5 rounded">
+                      Google Forms
+                    </span>
+                  )}
                 </h4>
                 <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
-                  Sandboxed Enterprise Onboarding Execution Endpoint
+                  {isGoogleForm
+                    ? 'Automated Google Forms Schema Mapping & Evidence Population'
+                    : 'Sandboxed Enterprise Execution Endpoint'}
                 </p>
               </div>
               <span className="text-[11px] font-mono text-zinc-500 bg-white/5 px-2 py-1 rounded border border-white/5">
@@ -251,7 +279,9 @@ export function MockFormExecution({
             <div className="pt-4 border-t border-white/10 flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
                 <Terminal className="w-3.5 h-3.5 text-zinc-500" />
-                <span>Playwright LOCATORS: 6 DOM targets mapped cleanly</span>
+                <span>
+                  {isGoogleForm ? 'Google Form DOM Selectors:' : 'Playwright LOCATORS:'} {fields.length} DOM targets mapped cleanly
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -262,10 +292,17 @@ export function MockFormExecution({
                 >
                   Reset Form
                 </button>
-                <div className="px-4 py-1.5 rounded-lg bg-white/10 text-white/80 text-xs font-mono border border-white/15 flex items-center gap-2">
-                  <Lock className="w-3 h-3 text-amber-400" />
-                  <span>Awaiting Cryptographic Approval Challenge</span>
-                </div>
+                {isHumanApproved ? (
+                  <div className="px-4 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-mono border border-emerald-500/20 flex items-center gap-2">
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    <span>Submitted &amp; Signed into Audit Chain</span>
+                  </div>
+                ) : (
+                  <div className="px-4 py-1.5 rounded-lg bg-white/10 text-white/80 text-xs font-mono border border-white/15 flex items-center gap-2">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>Awaiting Cryptographic Approval Challenge</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -17,6 +17,7 @@ import {
   Wrench,
   RotateCcw,
   Sparkles,
+  ExternalLink,
   X
 } from 'lucide-react';
 import { AgentProgress } from '@/components/AgentProgress';
@@ -37,12 +38,14 @@ import { TEMPLATES } from '@/lib/engine/fixtures';
 import { apiFetch } from '@/lib/session/client';
 
 export const AVAILABLE_TOOLS = [
-  { id: 'cedar_pdp', name: 'Cedar Policy PDP', desc: 'Zero-trust authorization & invariant verification' },
-  { id: 'comparator', name: 'Deterministic Comparator', desc: 'Strict discrepancy & contradiction detection' },
-  { id: 'bedrock_extractor', name: 'Bedrock Fact Extractor', desc: 'Grounded extraction with hallucination guardrail' },
-  { id: 'playwright_executor', name: 'Playwright Browser', desc: 'Automated sandboxed web form execution' },
-  { id: 'audit_chain', name: 'SHA-256 Hash Auditor', desc: 'Immutable tamper-evident cryptographic ledger' },
-  { id: 'schema_inspector', name: 'Form Schema Inspector', desc: 'Autonomous field mapping & constraint analysis' }
+  { id: 'employment_agent', name: 'Employment Domain Agent', desc: 'Offer letters, internships, college NOC & HR onboarding' },
+  { id: 'hardware_agent', name: 'Hardware Procurement Agent', desc: 'Workstation specifications, IT equipment & tier approvals' },
+  { id: 'healthcare_agent', name: 'Healthcare & Insurance Agent', desc: 'Medical reimbursement claims, hospital bills & diagnosis' },
+  { id: 'payout_agent', name: 'Financial & Payout Agent', desc: 'Vendor banking details, IFSC/routing & invoice remittance' },
+  { id: 'gov_agent', name: 'Civic & Government Agent', desc: 'Municipal clearances, residency proofs & permit applications' },
+  { id: 'academic_agent', name: 'Academic Credential Agent', desc: 'University registrar records, degree certificates & transcripts' },
+  { id: 'search_agent', name: 'Web Research & Discovery Agent', desc: 'Real-time internet search & regulatory fact-checking' },
+  { id: 'forms_agent', name: 'Google Forms Automation Agent', desc: 'Google Forms schema parsing, field auto-fill & submission' }
 ];
 
 export const AVAILABLE_MCP = [
@@ -52,6 +55,16 @@ export const AVAILABLE_MCP = [
   { id: 'cedar_policy_mcp', name: 'Cedar Policy MCP', desc: 'Distributed authorization rules and schema store' },
   { id: 'gov_registry_mcp', name: 'Civic Registry MCP', desc: 'Municipal portal & citizen clearance gateway' }
 ];
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  template?: string;
+  sources?: { title: string; url: string; snippet: string; sourceDomain: string }[];
+  suggestions?: { title: string; prompt: string; template?: string }[];
+}
 
 function StarrySky() {
   return (
@@ -82,6 +95,9 @@ export default function Page() {
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [followUpText, setFollowUpText] = useState('');
 
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [messagesByRun, setMessagesByRun] = useState<Record<string, ChatMessage[]>>({});
+
   // Active run ID ref to completely prevent stale interval closures from redirecting chats
   const activeRunIdRef = useRef<string | null>(null);
 
@@ -93,10 +109,10 @@ export default function Page() {
   const [enableSearch, setEnableSearch] = useState(false);
   const [enableFormFill, setEnableFormFill] = useState(false);
 
-  // Tools & MCP state with selection menus
-  const [selectedTools, setSelectedTools] = useState<string[]>([
-    'cedar_pdp', 'comparator', 'bedrock_extractor', 'playwright_executor', 'audit_chain'
-  ]);
+  // Tools & MCP state with selection menus - initialized to Domain Agents
+  const [selectedTools, setSelectedTools] = useState<string[]>(
+    AVAILABLE_TOOLS.map((t) => t.id)
+  );
   const [selectedMcp, setSelectedMcp] = useState<string[]>([
     'vault_mcp', 'aws_bedrock_mcp', 'hr_sandbox_mcp'
   ]);
@@ -258,15 +274,68 @@ export default function Page() {
       setStarted(true);
       setShowConflictModal(false);
 
+      const userMsg: ChatMessage = {
+        id: `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        role: 'user',
+        content: prompt,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setChatMessages((prev) => [...prev, userMsg]);
+
+      // Check if internet search should be triggered
+      const lower = prompt.toLowerCase();
+      const isSearch =
+        enableSearch ||
+        templateId === 'web_search_research' ||
+        lower.startsWith('search') ||
+        lower.includes('search web') ||
+        lower.includes('search internet') ||
+        lower.includes('search the web') ||
+        lower.includes('google search') ||
+        lower.includes('look up online');
+
+      let searchSources: any[] | undefined = undefined;
+      let searchSummary: string | undefined = undefined;
+
+      if (isSearch) {
+        try {
+          const sRes = await apiFetch('/api/v1/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: prompt })
+          });
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            searchSources = sData.results;
+            searchSummary = sData.summary;
+          }
+        } catch (sErr) {
+          console.warn('Search query failed:', sErr);
+        }
+      }
+
+      // Check if Google Forms intent
+      const isGoogleForms =
+        enableFormFill ||
+        templateId === 'google_forms_fill' ||
+        lower.includes('google form') ||
+        lower.includes('forms.gle') ||
+        lower.includes('docs.google.com/forms') ||
+        lower.includes('fill form') ||
+        lower.includes('fill google form');
+
+      const resolvedTemplate =
+        templateId || (isGoogleForms ? 'google_forms_fill' : (isSearch ? 'web_search_research' : undefined));
+
       const res = await apiFetch('/api/v1/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           intent: prompt,
-          template: templateId,
+          template: resolvedTemplate,
           userId: 'usr_eva_admin',
-          enableSearch,
-          enableFormFill,
+          enableSearch: isSearch,
+          enableFormFill: isGoogleForms,
           enableMcp: selectedMcp.length > 0,
           enableTools: selectedTools.length > 0,
           selectedTools,
@@ -279,6 +348,21 @@ export default function Page() {
         const data: WorkflowRun = await res.json();
         if (data && data.workflowRunId) {
           setWorkflow(data);
+
+          const assistantMsg: ChatMessage = {
+            id: `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            role: 'assistant',
+            content: searchSummary || data.agentResponse || 'Workflow initialized.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            sources: searchSources,
+            suggestions: data.suggestions
+          };
+
+          setChatMessages((prev) => {
+            const updated = [...prev, assistantMsg];
+            setMessagesByRun((m) => ({ ...m, [data.workflowRunId]: updated }));
+            return updated;
+          });
 
           // Record into this session's workflow runs
           activeRunIdRef.current = data.workflowRunId;
@@ -307,6 +391,36 @@ export default function Page() {
     }
   };
 
+  const handleSendFollowUp = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+    const prompt = text.trim();
+    setFollowUpText('');
+
+    const lower = prompt.toLowerCase();
+    const isSearchIntent =
+      enableSearch ||
+      lower.startsWith('search') ||
+      lower.includes('search web') ||
+      lower.includes('search the web') ||
+      lower.includes('search internet') ||
+      lower.includes('google search') ||
+      lower.includes('look up online') ||
+      lower.includes('find online');
+
+    const isGoogleFormsIntent =
+      enableFormFill ||
+      lower.includes('google form') ||
+      lower.includes('forms.gle') ||
+      lower.includes('fill form') ||
+      lower.includes('fill google form') ||
+      lower.includes('docs.google.com/forms');
+
+    await handleStartWorkflow(
+      prompt,
+      isGoogleFormsIntent ? 'google_forms_fill' : (isSearchIntent ? 'web_search_research' : undefined)
+    );
+  };
+
   const handleSelectWorkflow = async (runId: string) => {
     try {
       setIsLoading(true);
@@ -327,6 +441,30 @@ export default function Page() {
         setPromptText(active.intent);
         setStarted(true);
         setShowConflictModal(false);
+
+        setChatMessages((prev) => {
+          if (messagesByRun[runId] && messagesByRun[runId].length > 0) {
+            return messagesByRun[runId];
+          }
+          const restored: ChatMessage[] = [
+            {
+              id: `msg_u_${active.workflowRunId}`,
+              role: 'user',
+              content: active.intent,
+              timestamp: new Date(active.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            },
+            {
+              id: `msg_a_${active.workflowRunId}`,
+              role: 'assistant',
+              content: active.agentResponse || 'Workflow loaded.',
+              timestamp: new Date(active.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              suggestions: active.suggestions
+            }
+          ];
+          setMessagesByRun((m) => ({ ...m, [runId]: restored }));
+          return restored;
+        });
+
         if (active.conflicts && active.conflicts.some((c) => c.status === 'open') && active.status === 'AWAITING_USER_RESOLUTION') {
           setTimeout(() => {
             setShowConflictModal(true);
@@ -355,6 +493,7 @@ export default function Page() {
     setStarted(false);
     setWorkflow(null);
     setPromptText('');
+    setChatMessages([]);
     setShowConflictModal(false);
     setActiveTab('Answer');
   };
@@ -406,6 +545,21 @@ export default function Page() {
         const updated = await res.json();
         setWorkflow(updated);
         setShowConflictModal(false);
+        if (updated.agentResponse) {
+          const resMsg: ChatMessage = {
+            id: `msg_a_res_${Date.now()}`,
+            role: 'assistant',
+            content: updated.agentResponse,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setChatMessages((prev) => {
+            const u = [...prev, resMsg];
+            if (activeRunIdRef.current) {
+              setMessagesByRun((m) => ({ ...m, [activeRunIdRef.current!]: u }));
+            }
+            return u;
+          });
+        }
         fetchWorkflow();
       }
     } finally {
@@ -427,6 +581,21 @@ export default function Page() {
       if (res.ok) {
         const updated = await res.json();
         setWorkflow(updated);
+        if (updated.agentResponse) {
+          const apprMsg: ChatMessage = {
+            id: `msg_a_appr_${Date.now()}`,
+            role: 'assistant',
+            content: updated.agentResponse,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setChatMessages((prev) => {
+            const u = [...prev, apprMsg];
+            if (activeRunIdRef.current) {
+              setMessagesByRun((m) => ({ ...m, [activeRunIdRef.current!]: u }));
+            }
+            return u;
+          });
+        }
         fetchWorkflow();
       }
     } finally {
@@ -668,11 +837,11 @@ export default function Page() {
                           setMcpMenuOpen(false);
                         }}
                         className={`capsule-pill ${selectedTools.length > 0 ? 'active' : ''}`}
-                        title="Configure Agent Tools"
-                        aria-label="Toggle tools menu"
+                        title="Configure Domain Agents"
+                        aria-label="Toggle Domain Agents menu"
                       >
                         <Wrench className="w-3.5 h-3.5" />
-                        <span className="text-xs">Tools</span>
+                        <span className="text-xs">Domain Agents</span>
                         {selectedTools.length > 0 && (
                           <span className="text-[10px] font-mono text-white/60 ml-0.5">({selectedTools.length})</span>
                         )}
@@ -683,7 +852,7 @@ export default function Page() {
                           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
                             <div className="flex items-center gap-1.5">
                               <Wrench className="w-3.5 h-3.5 text-white/70" />
-                              <span className="text-xs font-medium text-white">Agent Tools</span>
+                              <span className="text-xs font-medium text-white">Domain Agents</span>
                               <span className="text-[10px] font-mono text-white/40">({selectedTools.length}/{AVAILABLE_TOOLS.length})</span>
                             </div>
                             <button
@@ -832,48 +1001,134 @@ export default function Page() {
                       </div>
                     )}
 
-                    {/* User Prompt Bubble on right */}
-                    <div className="user-query-bubble">
-                      {promptText || workflow?.intent || 'Administrative Operation'}
+                    {/* Chat Conversation Stream */}
+                    <div className="space-y-4 mb-4">
+                      {chatMessages.length > 0 ? (
+                        chatMessages.map((msg) => (
+                          <React.Fragment key={msg.id}>
+                            {msg.role === 'user' ? (
+                              <div className="user-query-bubble">
+                                {msg.content}
+                              </div>
+                            ) : (
+                              <div className="eva-response-card">
+                                <div className="eva-response-header">
+                                  <div className="w-5 h-5 rounded bg-white/10 border border-white/20 flex items-center justify-center p-0.5">
+                                    <img src="/logo.svg" alt="EVA" className="w-3.5 h-3.5 object-contain" />
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-white tracking-wide">EVA</span>
+                                    <span className="text-[10px] font-mono text-white/50 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                                      {msg.sources && msg.sources.length > 0
+                                        ? 'web research agent'
+                                        : workflow?.template === 'google_forms_fill'
+                                        ? 'forms automation agent'
+                                        : (workflow?.template === 'conversational'
+                                        ? 'orchestrator'
+                                        : (workflow?.category ? `${workflow.category} agent` : 'agent'))}
+                                    </span>
+                                  </div>
+                                  <span className="ml-auto text-[10px] font-mono text-white/40">{msg.timestamp}</span>
+                                </div>
+
+                                <div className="eva-response-body">
+                                  <MarkdownRenderer content={msg.content} />
+                                </div>
+
+                                {/* Web Research Sources Grid if present */}
+                                {msg.sources && msg.sources.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t border-white/10">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-white/60 mb-2">
+                                      <Globe className="w-3 h-3 text-white/70" />
+                                      <span>Verified Web Sources ({msg.sources.length})</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {msg.sources.map((src, i) => (
+                                        <a
+                                          key={i}
+                                          href={src.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="p-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition block group text-left"
+                                        >
+                                          <div className="text-xs font-medium text-white/90 group-hover:text-white truncate">
+                                            {src.title}
+                                          </div>
+                                          <div className="text-[10px] text-white/50 font-mono mt-0.5 flex items-center gap-1 truncate">
+                                            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                                            <span>{src.sourceDomain}</span>
+                                          </div>
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Interactive Suggestion Chips */}
+                                {msg.suggestions && msg.suggestions.length > 0 && (
+                                  <div className="mt-3.5 pt-3 border-t border-white/10 flex flex-wrap gap-2">
+                                    {msg.suggestions.map((sug, i) => (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => handleStartWorkflow(sug.prompt, sug.template)}
+                                        className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-white/90 hover:text-white transition flex items-center gap-1.5 group"
+                                      >
+                                        <span>{sug.title}</span>
+                                        <ArrowUp className="w-3 h-3 text-white/40 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </React.Fragment>
+                        ))
+                      ) : (
+                        <>
+                          {/* Fallback Single Prompt / Agent Card */}
+                          <div className="user-query-bubble">
+                            {promptText || workflow?.intent || 'Administrative Operation'}
+                          </div>
+
+                          {workflow?.agentResponse && (
+                            <div className="eva-response-card">
+                              <div className="eva-response-header">
+                                <div className="w-5 h-5 rounded bg-white/10 border border-white/20 flex items-center justify-center p-0.5">
+                                  <img src="/logo.svg" alt="EVA" className="w-3.5 h-3.5 object-contain" />
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-white tracking-wide">EVA</span>
+                                  <span className="text-[10px] font-mono text-white/50 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                                    {workflow.template === 'conversational' ? 'orchestrator' : (workflow.category ? `${workflow.category} agent` : 'agent')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="eva-response-body">
+                                <MarkdownRenderer content={workflow.agentResponse} />
+                              </div>
+
+                              {workflow.suggestions && workflow.suggestions.length > 0 && (
+                                <div className="mt-3.5 pt-3 border-t border-white/10 flex flex-wrap gap-2">
+                                  {workflow.suggestions.map((sug, i) => (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      onClick={() => handleStartWorkflow(sug.prompt, sug.template)}
+                                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-white/90 hover:text-white transition flex items-center gap-1.5 group"
+                                    >
+                                      <span>{sug.title}</span>
+                                      <ArrowUp className="w-3 h-3 text-white/40 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition" />
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
-
-                    {/* EVA Agent Conversational Response Bubble on left */}
-                    {workflow?.agentResponse && (
-                      <div className="eva-response-card">
-                        <div className="eva-response-header">
-                          <div className="w-5 h-5 rounded bg-white/10 border border-white/20 flex items-center justify-center p-0.5">
-                            <img src="/logo.svg" alt="EVA" className="w-3.5 h-3.5 object-contain" />
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-white tracking-wide">EVA</span>
-                            <span className="text-[10px] font-mono text-white/50 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
-                              {workflow.template === 'conversational' ? 'orchestrator' : (workflow.category ? `${workflow.category} agent` : 'agent')}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="eva-response-body">
-                          <MarkdownRenderer content={workflow.agentResponse} />
-                        </div>
-
-                        {/* Interactive Suggestion Chips */}
-                        {workflow.suggestions && workflow.suggestions.length > 0 && (
-                          <div className="mt-3.5 pt-3 border-t border-white/10 flex flex-wrap gap-2">
-                            {workflow.suggestions.map((sug, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => handleStartWorkflow(sug.prompt, sug.template)}
-                                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-white/90 hover:text-white transition flex items-center gap-1.5 group"
-                              >
-                                <span>{sug.title}</span>
-                                <ArrowUp className="w-3 h-3 text-white/40 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition" />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     {/* Agent Thinking Progress Disclosure with 8-Phase Stepper */}
                     {workflow?.template !== 'conversational' && (
@@ -918,6 +1173,7 @@ export default function Page() {
                         fields={workflow.formFields}
                         onInspectEvidence={handleInspectEvidence}
                         isSubmitting={isLoading}
+                        isHumanApproved={workflow.status === 'COMPLETED'}
                         targetSystem={workflow.targetSystem}
                         title={workflow.title ? `${workflow.title} Form` : undefined}
                       />
@@ -1111,8 +1367,8 @@ export default function Page() {
                           setDockedMcpMenuOpen(false);
                         }}
                         className={`docked-cap-btn ${selectedTools.length > 0 ? 'active' : ''}`}
-                        title="Configure Agent Tools"
-                        aria-label="Tools"
+                        title="Configure Domain Agents"
+                        aria-label="Domain Agents"
                       >
                         <Wrench className="w-4 h-4" />
                       </button>
@@ -1122,7 +1378,7 @@ export default function Page() {
                           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
                             <div className="flex items-center gap-1.5">
                               <Wrench className="w-3.5 h-3.5 text-white/70" />
-                              <span className="text-xs font-medium text-white">Agent Tools</span>
+                              <span className="text-xs font-medium text-white">Domain Agents</span>
                               <span className="text-[10px] font-mono text-white/40">({selectedTools.length}/{AVAILABLE_TOOLS.length})</span>
                             </div>
                             <button
@@ -1161,12 +1417,11 @@ export default function Page() {
                       type="text"
                       value={followUpText}
                       onChange={(e) => setFollowUpText(e.target.value)}
-                      placeholder="Ask a follow-up or enter override instructions..."
+                      placeholder="Reply to EVA, ask follow-up, search web, or give instructions..."
                       className="bottom-input"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && followUpText.trim()) {
-                          handleStartWorkflow(followUpText);
-                          setFollowUpText('');
+                          handleSendFollowUp(followUpText);
                         }
                       }}
                     />
@@ -1175,13 +1430,12 @@ export default function Page() {
                       type="button"
                       onClick={() => {
                         if (followUpText.trim()) {
-                          handleStartWorkflow(followUpText);
-                          setFollowUpText('');
+                          handleSendFollowUp(followUpText);
                         }
                       }}
                       disabled={!followUpText.trim() || isLoading}
                       className="action-circle-btn shrink-0"
-                      aria-label="Send follow-up"
+                      aria-label="Send message"
                     >
                       <ArrowUp className="w-4 h-4 text-black" />
                     </button>

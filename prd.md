@@ -188,36 +188,55 @@ EVA strictly separates **AI reasoning agents** from **deterministic infrastructu
   - Cannot read document ciphertext or plaintexts directly.
   - Stops immediately if intent confidence falls below 0.70.
 
-### 5.2 Multi-Domain Agents Architecture
-EVA implements domain-specific reasoning agents conforming to the `IDomainAgent` interface, registered dynamically via `DomainAgentRegistry`:
+### 5.2 Specialized Domain Agents Architecture
+EVA implements 8 domain-specific reasoning agents conforming to the `IDomainAgent` interface, exposed interactively to the user in the Domain Agents control matrix:
 
-#### 5.2.1 Employment Domain Agent (P0 MVP)
-- **Framework:** Strands Agents SDK
-- **Role:** Understands regulatory, corporate, and academic onboarding requirements. Determines required canonical fields and supporting document prerequisites.
-- **Tools:** `get_required_fields`, `validate_document_checklist`, `compile_domain_plan`.
-- **Invariants:**
-  - Operates strictly on document metadata and canonical schemas.
-  - Emits canonical requirements: `full_name`, `university`, `employer`, `role`, `work_location`, `start_date`, and refusal canary `bank_account_number`.
+#### 5.2.1 Employment Domain Agent
+- **Role:** Analyzes offer letters, internship agreements, college NOCs, and corporate HR onboarding workflows.
+- **Canonical Fields:** `full_name`, `university`, `employer`, `role`, `work_location`, `start_date`, and refusal canary `bank_account_number`.
+- **Invariants:** Resolves contradictions deterministically before population; halts if document records disagree.
 
-#### 5.2.2 Government & Bureaucracy Agent
-- **Role:** Evaluates municipal clearance, civic residency registration, and identity document submissions.
+#### 5.2.2 Hardware Procurement Agent
+- **Role:** Evaluates engineering workstation requirements (RAM, SSD, CPU tiers), department cost centers, and equipment allowance policies.
+- **Canonical Fields:** `employee_name`, `device_model`, `ram_spec`, `storage_spec`, `budget_amount`, `department_code`.
+- **Invariants:** Enforces Cedar hardware tier budget caps; requests human review for non-standard configurations.
+
+#### 5.2.3 Healthcare & Insurance Agent
+- **Role:** Reconciles hospital discharge summaries, itemized inpatient invoices, attending physician reports, and medical insurance claims.
+- **Canonical Fields:** `patient_name`, `insurance_policy_id`, `hospital_name`, `claim_amount`, `admission_date`, `discharge_date`.
+- **Invariants:** Strictly refuses to invent medical codes or alter admission dates.
+
+#### 5.2.4 Financial & Payout Agent
+- **Role:** Manages vendor direct deposit banking details, IFSC/routing code updates, and consulting invoice remittance.
+- **Canonical Fields:** `vendor_name`, `account_number`, `ifsc_code`, `bank_name`, `payout_currency`.
+- **Invariants:** Modifying banking coordinates is treated as a critical financial instrument requiring explicit cryptographic human signature.
+
+#### 5.2.5 Civic & Government Agent
+- **Role:** Handles municipal clearances, residency verification, and statutory civil administration filings.
+- **Canonical Fields:** `full_name`, `address`, `jurisdiction`, `permit_id`.
 - **Invariants:** Cannot fabricate national identity numbers or bypass statutory human verification.
 
-#### 5.2.3 Healthcare Administration Agent
-- **Role:** Reconciles hospital discharge summaries, itemized inpatient invoices, and insurance claim filings.
-- **Invariants:** Cannot alter diagnosis codes or clinical admission/discharge dates.
-
-#### 5.2.4 Finance & Procurement Agent
-- **Role:** Manages developer workstation procurement and vendor direct deposit payment authorizations.
-- **Invariants:** Cannot alter banking coordinates (IFSC/MICR) without verified bank proof.
-
-#### 5.2.5 Education Domain Agent
-- **Role:** Verifies degree certifications, institutional transcript equivalency, and registrar NOCs.
+#### 5.2.6 Academic Credential Agent
+- **Role:** Validates registrar records, degree certifications, institutional course transcripts, and university NOCs.
+- **Canonical Fields:** `student_name`, `institution`, `degree_program`, `graduation_year`, `gpa`.
 - **Invariants:** Cannot certify unverified academic records or modify grading criteria.
 
-#### 5.2.6 Legal & Compliance Agent
-- **Role:** Analyzes consulting master agreements, non-disclosure compliance, and regulatory liability bounds.
-- **Invariants:** Cannot waive liability terms without human legal countersignature.
+#### 5.2.7 Web Research & Discovery Agent (Public Internet Intelligence)
+- **Role:** Queries public web endpoints (DuckDuckGo Instant Answer API, Wikipedia OpenSearch API) to retrieve real-time facts, regulatory rules, and corporate policies with zero PII leakage.
+- **Features:** 
+  - Real-time search query execution with sub-second response times.
+  - Multi-source citation synthesis with direct domain attribution cards.
+  - Integration with EVA conversational chatbot stream.
+- **Invariants:** Search queries are scrubbed of user PII; web data is treated as untrusted passive context.
+
+#### 5.2.8 Google Forms Automation Agent
+- **Role:** Parses Google Forms schemas (`docs.google.com/forms`, `forms.gle`), discovers DOM field locators, binds verified personal vault evidence to form entries, and executes sandboxed browser filling.
+- **Features:**
+  - Distinctive Google Forms sandbox browser chrome with signature `#673ab7` purple top banner.
+  - Real-time DOM selector mapping for candidate full name, position, location, employer, and commencement date.
+  - Deterministic single-execution typing animation: animates field population sequentially once and **permanently stops**, preventing continuous typing loops during background re-polling.
+  - Single-use cryptographic `ApprovalChallenge` generation gating external submission.
+- **Invariants:** Never submits Google Forms without explicit human sign-off; respects Cedar zero-trust submission policies.
 
 ### 5.3 Evidence Agent
 - **Framework:** Strands Agents SDK
@@ -518,6 +537,19 @@ If Playwright clicks `#submit_button` but the network terminates before a receip
 - State transitions to **`SUBMISSION_STATUS_UNKNOWN`**.
 - System **strictly halts** and forbids automated retries to prevent duplicate legal/financial commitments.
 - Human operator is presented with the last known browser DOM state for manual confirmation.
+
+### 10.3 Deterministic Single-Shot Population & Halt Lifecycle
+To eliminate unbounded execution loops and jarring re-typing animations during background state synchronization:
+- The form execution engine computes a deterministic signature (`fieldsSignature`) of all field IDs and values.
+- Sequential typing simulation executes once across all DOM locators, marking the form state as **Populated & Verified**.
+- Background re-polling (3.5s interval) preserves the completed DOM state without resetting filled indices or cycling animations.
+- Execution halts strictly at the **Human Consent Gate**, requiring an explicit, non-replayable cryptographic challenge nonce to submit.
+
+### 10.4 Google Forms Automation Subsystem
+EVA provides native support for Google Forms (`docs.google.com/forms`, `forms.gle`):
+- **Schema Discovery:** Maps Google Forms entry fields (`entry.1000001` through `entry.1000005`) to verified Personal Vault evidence (`full_name`, `role`, `work_location`, `employer`, `start_date`).
+- **Browser Sandbox Preview:** Features an authentic browser viewport with TLS 1.3 encryption status, Google Forms URL address bar, and signature purple banner (`#673ab7`).
+- **Zero-Trust Policy Gating:** Cedar PDP evaluates `Action::"submit_form"` against `Form::"google_forms_fill"` — returning strict `DENY` until the human operator reviews each populated field and signs the cryptographic approval challenge.
 
 ---
 

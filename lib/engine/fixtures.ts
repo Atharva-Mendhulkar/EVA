@@ -237,6 +237,36 @@ export const TEMPLATES: Record<string, OperationTemplateConfig> = {
     conflictField: 'full_name',
     conflictDescription: 'Conversational orchestrator interaction.',
     fieldSchema: []
+  },
+  google_forms_fill: {
+    templateId: 'google_forms_fill',
+    title: 'Google Forms Automated Filing',
+    category: 'onboarding',
+    defaultPrompt: 'Fill Google Form for candidate registration & onboarding',
+    targetSystem: 'Google Forms (docs.google.com/forms)',
+    resourceName: 'Form::"google_forms_fill"',
+    documentIds: ['doc_profile_01', 'doc_offer_03'],
+    conflictField: 'work_location',
+    conflictDescription: 'Work location differing across verified documents.',
+    fieldSchema: [
+      { field: 'full_name', label: 'Candidate Full Name (entry.1000001)' },
+      { field: 'role', label: 'Position / Role (entry.1000002)' },
+      { field: 'work_location', label: 'Primary Location (entry.1000003)' },
+      { field: 'employer', label: 'Company Name (entry.1000004)' },
+      { field: 'start_date', label: 'Commencement Date (entry.1000005)' }
+    ]
+  },
+  web_search_research: {
+    templateId: 'web_search_research',
+    title: 'Web Intelligence & Internet Research',
+    category: 'custom',
+    defaultPrompt: 'Search the internet for onboarding policies and requirements',
+    targetSystem: 'Web Intelligence & Public Regulatory Gateway',
+    resourceName: 'Agent::"web_researcher"',
+    documentIds: [],
+    conflictField: 'full_name',
+    conflictDescription: 'No conflict detected.',
+    fieldSchema: []
   }
 };
 
@@ -244,9 +274,80 @@ export function getSeedEvidence(workflowRunId: string, templateId: string = 'int
   const now = Date.now();
 
   switch (templateId) {
+    case 'web_search_research':
     case 'conversational':
     case 'custom_operation':
       return [];
+
+    case 'google_forms_fill':
+      return [
+        {
+          evidenceId: `ev_gf_name_${workflowRunId}`,
+          workflowRunId,
+          field: 'full_name',
+          value: 'Atharva Mendhulkar',
+          sourceDocumentId: 'doc_profile_01',
+          sourceDocumentName: 'Personal_Profile.pdf',
+          sourceLocation: 'Page 1, Header',
+          sourceExcerpt: 'Full Legal Name: Atharva Mendhulkar',
+          extractedAt: new Date(now - 30000).toISOString(),
+          documentUpdatedAt: '2026-08-18T10:00:00Z',
+          confidence: 0.99
+        },
+        {
+          evidenceId: `ev_gf_role_${workflowRunId}`,
+          workflowRunId,
+          field: 'role',
+          value: 'Software Engineering Intern',
+          sourceDocumentId: 'doc_offer_03',
+          sourceDocumentName: 'Internship_Offer_Letter.pdf',
+          sourceLocation: 'Page 1, Paragraph 1',
+          sourceExcerpt: 'Position: Software Engineering Intern',
+          extractedAt: new Date(now - 20000).toISOString(),
+          documentUpdatedAt: '2026-09-17T14:30:00Z',
+          confidence: 0.98
+        },
+        {
+          evidenceId: `ev_gf_employer_${workflowRunId}`,
+          workflowRunId,
+          field: 'employer',
+          value: 'Acme Cloud Systems',
+          sourceDocumentId: 'doc_offer_03',
+          sourceDocumentName: 'Internship_Offer_Letter.pdf',
+          sourceLocation: 'Page 1, Header',
+          sourceExcerpt: 'Acme Cloud Systems India Pvt Ltd',
+          extractedAt: new Date(now - 20000).toISOString(),
+          documentUpdatedAt: '2026-09-17T14:30:00Z',
+          confidence: 0.99
+        },
+        {
+          evidenceId: `ev_gf_location_${workflowRunId}`,
+          workflowRunId,
+          field: 'work_location',
+          value: 'Bangalore',
+          sourceDocumentId: 'doc_offer_03',
+          sourceDocumentName: 'Internship_Offer_Letter.pdf',
+          sourceLocation: 'Page 1, Paragraph 2',
+          sourceExcerpt: 'Assigned office location: Bangalore Office',
+          extractedAt: new Date(now - 20000).toISOString(),
+          documentUpdatedAt: '2026-09-17T14:30:00Z',
+          confidence: 0.97
+        },
+        {
+          evidenceId: `ev_gf_start_${workflowRunId}`,
+          workflowRunId,
+          field: 'start_date',
+          value: '2026-10-01',
+          sourceDocumentId: 'doc_offer_03',
+          sourceDocumentName: 'Internship_Offer_Letter.pdf',
+          sourceLocation: 'Page 1, Paragraph 2',
+          sourceExcerpt: 'Commencement date: October 1, 2026',
+          extractedAt: new Date(now - 20000).toISOString(),
+          documentUpdatedAt: '2026-09-17T14:30:00Z',
+          confidence: 0.95
+        }
+      ];
+
     case 'hardware_procurement':
       return [
         {

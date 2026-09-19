@@ -10,14 +10,17 @@ import { submitPopulatedForm } from '../playwright/executor';
 import { detectConflicts } from './comparator';
 import { DEMO_VAULT_DOCUMENTS, getSeedEvidence, TEMPLATES } from './fixtures';
 import {
+  ApprovalChallenge,
   AuditEvent,
   AwaitingAction,
   CanonicalField,
+  CedarEvaluationResult,
   CedarResource,
   Conflict,
   DecisionExplanation,
   Evidence,
   FormField,
+  FormPopulationPlan,
   WorkflowRun,
   WorkflowStatus,
   WorkflowStep
@@ -54,6 +57,26 @@ export function classifyIntent(intentText: string): string {
   const text = (intentText || '').toLowerCase().trim();
   if (isGreetingIntent(text)) {
     return 'conversational';
+  }
+  if (
+    text.includes('google form') ||
+    text.includes('forms.gle') ||
+    text.includes('docs.google.com/forms') ||
+    text.includes('fill form') ||
+    text.includes('google forms')
+  ) {
+    return 'google_forms_fill';
+  }
+  if (
+    text.includes('search web') ||
+    text.includes('search the web') ||
+    text.includes('search internet') ||
+    text.includes('google search') ||
+    text.includes('look up online') ||
+    text.includes('search the internet') ||
+    text.startsWith('search ')
+  ) {
+    return 'web_search_research';
   }
   if (
     text.includes('hardware') ||
@@ -399,10 +422,100 @@ export class WorkflowStore {
       agentResponse = `I have initiated your **Developer Hardware Procurement** request.\n\nParsed hardware specifications: **16-inch MacBook Pro M3 Max (64GB RAM, 1TB SSD)** against engineering department budget allowance and cost center **ENG-PROD-2026**.\n\nForm population plan generated and evaluated against Cedar equipment tier policies.`;
     } else if (selectedTemplateKey === 'medical_reimbursement') {
       agentResponse = `I have initiated your **Medical Expense Reimbursement** claim.\n\nExtracted hospital invoices, admission dates, and attending physician summaries from Apollo Hospitals. Verified claim total ($1,850.00) conforms to policy limits without ungrounded fabrications.`;
-    } else if (selectedTemplateKey === 'vendor_payout_update') {
-      agentResponse = `I have processed your **Vendor Payout Bank Account Update**.\n\nExtracted account number and IFSC routing code from verified bank records. Because banking details are sensitive financial instruments, Cedar zero-trust policy enforces strict action-bound human approval before payout records are modified.`;
+    } else if (selectedTemplateKey === 'google_forms_fill') {
+      agentResponse = `I have parsed your **Google Form** filing request and extracted 5 verified fields from your Personal Vault (*Personal Profile* and *Internship Offer Letter*):
+
+- **Candidate Full Name**: \`Atharva Mendhulkar\` *(doc_profile_01)*
+- **Position / Role**: \`Software Engineering Intern\` *(doc_offer_03)*
+- **Primary Location**: \`Bangalore\` *(doc_offer_03)*
+- **Company Name**: \`Acme Cloud Systems\` *(doc_offer_03)*
+- **Commencement Date**: \`2026-10-01\` *(doc_offer_03)*
+
+🔒 **Cedar Zero-Trust Policy Evaluated**: Form population **ALLOWED**. The simulated browser sandbox has mapped all DOM selectors and populated your verified evidence. Consequential external submission is safely paused awaiting your review and approval.`;
+    } else if (selectedTemplateKey === 'web_search_research') {
+      agentResponse = `I have queried the public web and indexed verified intelligence sources for: *"${activeIntent}"*.\n\nAll retrieved evidence has been synthesized below with verified origin domains. You can inspect citations, request deeper research, or operationalize these findings into administrative workflows.`;
     } else {
       agentResponse = `I have analyzed your administrative request: *"${activeIntent}"*.\n\nExtracted available evidence from your vault, evaluated applicable authorization rules, and initialized the execution pipeline.`;
+    }
+
+    let populatedFields: FormField[] = [];
+    let populationPlan: FormPopulationPlan | undefined = undefined;
+    let approvalChallenge: ApprovalChallenge | undefined = undefined;
+    let cedarDecisions: CedarEvaluationResult[] = [];
+
+    if (selectedTemplateKey === 'google_forms_fill') {
+      const res = buildPopulationPlan(
+        templateConfig.templateId,
+        runId,
+        templateConfig.fieldSchema,
+        evidenceList,
+        {}
+      );
+      populationPlan = res.plan;
+      populatedFields = res.fields;
+
+      const formStateHash = sha256Hex(canonicalJson(populatedFields));
+      const challengeNonce = randomBytes(16).toString('hex');
+      approvalChallenge = {
+        approvalId: `appr_${Date.now()}_${runId}`,
+        workflowRunId: runId,
+        action: 'submit_form',
+        formId: templateConfig.templateId,
+        formStateHash,
+        actionHash: sha256Hex(`${runId}:${templateConfig.templateId}:${formStateHash}:${challengeNonce}`),
+        nonce: challengeNonce,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        status: 'pending'
+      };
+
+      const cedarResource = (templateConfig.resourceName || `Form::"${templateConfig.templateId}"`) as CedarResource;
+      const submitPreDecision = cedarEngine.evaluate(
+        'EvaAgent::"form_execution"',
+        'Action::"submit_form"',
+        cedarResource,
+        {
+          conflict_resolved: true,
+          evidence_confidence: populationPlan.confidence,
+          human_approved: false,
+          workflow_scope: templateConfig.templateId
+        }
+      );
+      cedarDecisions.push(submitPreDecision);
+
+      const denyAudit: AuditEvent = {
+        eventId: `aud_${Date.now()}_deny_gf`,
+        workflowRunId: runId,
+        timestamp: new Date().toISOString(),
+        actor: 'cedar::engine',
+        action: 'evaluate_policy (submit_form)',
+        decision: 'DENY',
+        reason: submitPreDecision.reason,
+        explanation: {
+          decisionId: submitPreDecision.decisionId,
+          action: 'submit_form',
+          outcome: 'DENY',
+          summary: 'Cedar denied submission: human_approved = false. Google Form submission requires explicit human consent.',
+          whyStopped: 'The agent parsed and mapped the Google Form schema, but Policy 02 forbids external submission until the user reviews and signs off.',
+          evidenceRefs: [],
+          policyRefs: [submitPreDecision.policyId],
+          conditions: submitPreDecision.conditions,
+          actor: 'cedar::engine',
+          timestamp: new Date().toISOString(),
+          nextAction: 'Step Functions initiates waitForTaskToken pause and displays Human Approval Gate in UI',
+          whatWouldChange: 'Changing human_approved from false to true via user approval will result in Cedar ALLOW.'
+        }
+      };
+      appendAuditEvent(initialAudit, denyAudit);
+
+      const approvalToken = `sfn_token_approval_${Date.now()}`;
+      this.serverTokens.set(runId, {
+        token: approvalToken,
+        step: 'HUMAN_APPROVAL',
+        workflowRunId: runId,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 86400000
+      });
     }
 
     const initialRun: WorkflowRun = {
@@ -415,26 +528,52 @@ export class WorkflowStore {
       targetSystem: dynamicTarget,
       status: isConversational
         ? 'COMPLETED'
+        : selectedTemplateKey === 'google_forms_fill'
+        ? 'AWAITING_HUMAN_APPROVAL'
         : conflictResult.conflicts.length > 0
         ? 'AWAITING_USER_RESOLUTION'
         : (isCustom ? 'COMPLETED' : 'PLANNING'),
       currentStep: isConversational
         ? 'Orchestrator ready'
+        : selectedTemplateKey === 'google_forms_fill'
+        ? 'Awaiting human consent to submit'
         : conflictResult.conflicts.length > 0
         ? 'Resolve conflict'
         : (isCustom ? 'Operation completed' : 'Processing request'),
-      stepIndex: isConversational ? 3 : (isCustom ? 8 : (conflictResult.conflicts.length > 0 ? 4 : 5)),
-      awaitingAction: (isConversational || isCustom)
+      stepIndex: isConversational
+        ? 3
+        : selectedTemplateKey === 'google_forms_fill'
+        ? 7
+        : isCustom
+        ? 8
+        : conflictResult.conflicts.length > 0
+        ? 4
+        : 5,
+      awaitingAction: isConversational || isCustom
         ? null
-        : (conflictResult.conflicts.length > 0 ? 'CONFLICT_RESOLUTION' : null),
+        : selectedTemplateKey === 'google_forms_fill'
+        ? 'HUMAN_APPROVAL'
+        : conflictResult.conflicts.length > 0
+        ? 'CONFLICT_RESOLUTION'
+        : null,
       plan: isConversational
         ? conversationalPlan
-        : (isCustom ? initialPlan.map((s) => ({ ...s, status: 'COMPLETED' as const })) : initialPlan),
+        : selectedTemplateKey === 'google_forms_fill'
+        ? initialPlan.map((s, idx) => {
+            if (idx < 6) return { ...s, status: 'COMPLETED' as const };
+            if (idx === 6) return { ...s, status: 'ATTENTION' as const };
+            return s;
+          })
+        : isCustom
+        ? initialPlan.map((s) => ({ ...s, status: 'COMPLETED' as const }))
+        : initialPlan,
       evidence: evidenceList,
       conflicts: conflictResult.conflicts,
       auditTrail: initialAudit,
-      cedarDecisions: [],
-      formFields: [],
+      cedarDecisions,
+      formFields: populatedFields,
+      formPopulationPlan: populationPlan,
+      approvalChallenge,
       latestExplanation: initialAudit[initialAudit.length - 1]?.explanation,
       agentResponse,
       suggestions,
