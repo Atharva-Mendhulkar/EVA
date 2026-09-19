@@ -15,7 +15,7 @@ node_modules
 .DS_Store
 *.tsbuildinfo
 cdk.out/
-infra/cdk.out/
+infra/cdk.out*/
 
 # documentation
 docs/

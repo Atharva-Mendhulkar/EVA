@@ -10,7 +10,13 @@ export const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 864
 
 export const MAX_DOCUMENT_SIZE_MB = Number(process.env.MAX_DOCUMENT_SIZE_MB || 10);
 
-/** Prefixes same-origin API paths with the deployed backend when configured. */
+/** Prefixes same-origin API paths with the deployed backend when configured on the server.
+ * When executing in the browser, always returns the relative path so client fetch
+ * hits the Next.js App Router serverless routes directly.
+ */
 export function apiUrl(path: string): string {
-  return `${API_BASE_URL}${path}`;
+  if (typeof window !== 'undefined') {
+    return path;
+  }
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
 }
