@@ -1,23 +1,28 @@
 {
-  "Comment": "EVA Onboarding State Machine (PRD Section 14)",
-  "StartAt": "RetrieveVaultDocuments",
+  "Comment": "EVA Onboarding State Machine - Evidence -> Reconcile -> Form Filling -> Cedar -> Playwright -> Human Gate -> Submit -> Audit",
+  "StartAt": "ClassifyAndRouteIntent",
   "States": {
-    "RetrieveVaultDocuments": {
+    "ClassifyAndRouteIntent": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-vault-retriever",
-      "Next": "ExtractEvidenceBedrock"
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-orchestrator",
+      "Next": "ExecuteEmploymentDomainAgent"
     },
-    "ExtractEvidenceBedrock": {
+    "ExecuteEmploymentDomainAgent": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-bedrock-extractor",
-      "Next": "DetectConflicts"
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-employment-agent",
+      "Next": "IngestAndExtractEvidence"
     },
-    "DetectConflicts": {
+    "IngestAndExtractEvidence": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-evidence-agent",
+      "Next": "ReconcileEvidence"
+    },
+    "ReconcileEvidence": {
       "Type": "Task",
       "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-conflict-detector",
-      "Next": "EvaluateConflictCondition"
+      "Next": "CheckConflictPresence"
     },
-    "EvaluateConflictCondition": {
+    "CheckConflictPresence": {
       "Type": "Choice",
       "Choices": [
         {
@@ -26,7 +31,7 @@
           "Next": "WaitForUserConflictResolution"
         }
       ],
-      "Default": "AuthorizePopulate"
+      "Default": "ExecuteFormFillingAgent"
     },
     "WaitForUserConflictResolution": {
       "Type": "Task",
@@ -40,24 +45,23 @@
           "workflowRunId.$": "$.workflowRunId"
         }
       },
-      "Next": "ApplyConflictResolution"
+      "Next": "ExecuteFormFillingAgent"
     },
-    "ApplyConflictResolution": {
+    "ExecuteFormFillingAgent": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-apply-resolution",
-      "Next": "AuthorizePopulate"
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-form-filling-agent",
+      "Next": "AuthorizeFormPopulationCedar"
     },
-    "AuthorizePopulate": {
+    "AuthorizeFormPopulationCedar": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-evaluator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-pdp",
       "Parameters": {
         "action": "Action::\"populate_form\"",
-        "principal": "EvaAgent::\"form_execution\"",
+        "principal": "EvaAgent::\"form_filling\"",
         "resource": "Form::\"internship_onboarding\"",
         "context": {
           "conflict_resolved": true,
-          "evidence_confidence.$": "$.minConfidence",
-          "human_approved": false,
+          "evidence_confidence.$": "$.planConfidence",
           "workflow_scope": "internship"
         }
       },
@@ -69,27 +73,31 @@
         {
           "Variable": "$.decision",
           "StringEquals": "ALLOW",
-          "Next": "ExecuteFormPopulation"
+          "Next": "ExecutePlaywrightPopulation"
         }
       ],
       "Default": "WorkflowHaltedPolicyDenied"
     },
-    "ExecuteFormPopulation": {
+    "ExecutePlaywrightPopulation": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-form-populator",
-      "Next": "AuthorizeSubmitPreApproval"
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-playwright-executor",
+      "Parameters": {
+        "action": "POPULATE",
+        "plan.$": "$.formPopulationPlan"
+      },
+      "Next": "AuthorizeSubmitPreApprovalCedar"
     },
-    "AuthorizeSubmitPreApproval": {
+    "AuthorizeSubmitPreApprovalCedar": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-evaluator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-pdp",
       "Parameters": {
         "action": "Action::\"submit_form\"",
-        "principal": "EvaAgent::\"form_execution\"",
+        "principal": "EvaAgent::\"form_filling\"",
         "resource": "Form::\"internship_onboarding\"",
         "context": {
-          "conflict_resolved": true,
-          "evidence_confidence.$": "$.minConfidence",
           "human_approved": false,
+          "action_hash_valid": false,
+          "conflict_resolved": true,
           "workflow_scope": "internship"
         }
       },
@@ -104,22 +112,23 @@
         "Payload": {
           "step": "HUMAN_APPROVAL",
           "taskToken.$": "$$.Task.Token",
-          "workflowRunId.$": "$.workflowRunId"
+          "workflowRunId.$": "$.workflowRunId",
+          "formStateHash.$": "$.formStateHash"
         }
       },
-      "Next": "AuthorizeSubmitPostApproval"
+      "Next": "AuthorizeSubmitPostApprovalCedar"
     },
-    "AuthorizeSubmitPostApproval": {
+    "AuthorizeSubmitPostApprovalCedar": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-evaluator",
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-cedar-pdp",
       "Parameters": {
         "action": "Action::\"submit_form\"",
-        "principal": "EvaAgent::\"form_execution\"",
+        "principal": "EvaAgent::\"form_filling\"",
         "resource": "Form::\"internship_onboarding\"",
         "context": {
-          "conflict_resolved": true,
-          "evidence_confidence.$": "$.minConfidence",
           "human_approved": true,
+          "action_hash_valid": true,
+          "conflict_resolved": true,
           "workflow_scope": "internship"
         }
       },
@@ -131,17 +140,21 @@
         {
           "Variable": "$.decision",
           "StringEquals": "ALLOW",
-          "Next": "ExecuteFormSubmission"
+          "Next": "ExecutePlaywrightSubmission"
         }
       ],
       "Default": "WorkflowHaltedPolicyDenied"
     },
-    "ExecuteFormSubmission": {
+    "ExecutePlaywrightSubmission": {
       "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-form-submitter",
-      "Next": "WriteFinalAuditAndComplete"
+      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-playwright-executor",
+      "Parameters": {
+        "action": "SUBMIT",
+        "formId": "internship_onboarding"
+      },
+      "Next": "WriteAuditAndVerify"
     },
-    "WriteFinalAuditAndComplete": {
+    "WriteAuditAndVerify": {
       "Type": "Task",
       "Resource": "arn:aws:lambda:us-east-1:123456789012:function:eva-audit-writer",
       "Next": "WorkflowCompleted"
@@ -151,7 +164,7 @@
     },
     "WorkflowHaltedPolicyDenied": {
       "Type": "Fail",
-      "Cause": "Cedar Policy Evaluation DENIED the action.",
+      "Cause": "Cedar Authorization Policy strictly DENIED action.",
       "Error": "PolicyDenied"
     }
   }

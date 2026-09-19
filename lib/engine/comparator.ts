@@ -17,29 +17,23 @@ export const CITY_SYNONYMS: Record<string, string> = {
 
 export function normalizeFieldValue(field: CanonicalField, rawValue: string): string {
   if (!rawValue) return '';
-  const cleaned = rawValue.trim().toLowerCase().replace(/\s+/g, ' ');
+  const trimmed = rawValue.trim();
 
-  if (field === 'work_location') {
-    return CITY_SYNONYMS[cleaned] || cleaned;
+  switch (field) {
+    case 'work_location': {
+      const city = trimmed.toLowerCase().replace(/\s+/g, ' ');
+      return CITY_SYNONYMS[city] || city;
+    }
+    case 'ram_spec':
+      return trimmed.toLowerCase().replace(/unified memory|ram|\s+/g, '');
+    case 'budget_amount':
+    case 'claim_amount':
+      return trimmed.replace(/[₹$,\s]/g, '');
+    case 'ifsc_code':
+      return trimmed.toUpperCase().replace(/\s+/g, '');
+    default:
+      return trimmed.toLowerCase().replace(/\s+/g, ' ');
   }
-
-  if (field === 'ram_spec') {
-    return cleaned
-      .replace(/unified memory/g, '')
-      .replace(/ram/g, '')
-      .replace(/\s+/g, '')
-      .trim();
-  }
-
-  if (field === 'budget_amount' || field === 'claim_amount') {
-    return cleaned.replace(/[₹$,\s]/g, '');
-  }
-
-  if (field === 'ifsc_code') {
-    return cleaned.toUpperCase().replace(/\s+/g, '');
-  }
-
-  return cleaned;
 }
 
 export interface ComparisonResult {

@@ -6,7 +6,7 @@ import { CanonicalField, DocumentMetadata, Evidence } from './types';
 export interface OperationTemplateConfig {
   templateId: string;
   title: string;
-  category: 'onboarding' | 'procurement' | 'medical' | 'financial' | 'custom';
+  category: 'onboarding' | 'procurement' | 'medical' | 'financial' | 'government' | 'education' | 'legal' | 'custom';
   defaultPrompt: string;
   targetSystem: string;
   resourceName: string;
@@ -181,6 +181,37 @@ export const TEMPLATES: Record<string, OperationTemplateConfig> = {
       { field: 'account_number', label: 'Account Number' },
       { field: 'ifsc_code', label: 'Branch IFSC Code' },
       { field: 'payout_currency', label: 'Remittance Currency' }
+    ]
+  },
+  government_civic_clearance: {
+    templateId: 'government_civic_clearance',
+    title: 'Government Civic Clearance & Permit',
+    category: 'government',
+    defaultPrompt: 'Apply for municipal civic clearance and residency permit',
+    targetSystem: 'National Citizen Portal & Municipal Services Sandbox',
+    resourceName: 'Form::"government_civic_clearance"',
+    documentIds: ['doc_profile_01', 'doc_vendor_agr_09'],
+    conflictField: 'work_location',
+    conflictDescription: 'Jurisdiction discrepancy between verified residence and permit jurisdiction.',
+    fieldSchema: [
+      { field: 'full_name', label: 'Citizen Full Legal Name' },
+      { field: 'work_location', label: 'Jurisdiction / City' },
+      { field: 'start_date', label: 'Effective Date' }
+    ]
+  },
+  education_credential_verification: {
+    templateId: 'education_credential_verification',
+    title: 'Academic Transcript & NOC Verification',
+    category: 'education',
+    defaultPrompt: 'Verify university transcripts and academic clearance',
+    targetSystem: 'National Academic Depository & University Registrar Portal',
+    resourceName: 'Form::"education_credential_verification"',
+    documentIds: ['doc_profile_01', 'doc_noc_02'],
+    conflictField: 'university',
+    conflictDescription: 'Institutional discrepancy between student profile and registrar records.',
+    fieldSchema: [
+      { field: 'full_name', label: 'Student Legal Name' },
+      { field: 'university', label: 'Degree Granting University' }
     ]
   },
   custom_operation: {

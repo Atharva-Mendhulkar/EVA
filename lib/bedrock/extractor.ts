@@ -2,6 +2,7 @@
 // Implements PRD Section 14.3 (Bedrock LLM API & Prompt Specification) and Section 21 (Deterministic Demo Mode)
 
 import { CanonicalField, Evidence } from '@/lib/engine/types';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 export const BEDROCK_MODELS = {
   primary: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
@@ -49,24 +50,20 @@ export async function extractEvidenceWithBedrock(
   const wrappedPayload = `<untrusted_document_data name="${documentName}">\n${rawText}\n</untrusted_document_data>`;
 
   const hasAwsCreds = Boolean(
-    process.env.AWS_REGION &&
-    process.env.AWS_ACCESS_KEY_ID &&
-    process.env.AWS_SECRET_ACCESS_KEY
+    (process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION) &&
+    ((process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) || process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI)
   );
 
   // If credentials are present, attempt live invocation
   if (hasAwsCreds && process.env.DEMO_MODE !== 'true') {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2800); // 2.8s SLA limit (PRD 21)
-
-      // Invoke Bedrock via AWS Signature v4 or REST endpoint
-      const res = await fetch(`https://bedrock-runtime.${process.env.AWS_REGION}.amazonaws.com/model/${BEDROCK_MODELS.primary}/invoke`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+      const client = new BedrockRuntimeClient({
+        region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1'
+      });
+      const command = new InvokeModelCommand({
+        modelId: BEDROCK_MODELS.primary,
+        contentType: 'application/json',
+        accept: 'application/json',
         body: JSON.stringify({
           anthropic_version: 'bedrock-2023-05-31',
           max_tokens: 2048,
@@ -78,14 +75,12 @@ export async function extractEvidenceWithBedrock(
               content: `Extract all fields for internship onboarding according to the specified schema:\n\n${wrappedPayload}`
             }
           ]
-        }),
-        signal: controller.signal
+        })
       });
 
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const json = await res.json();
+      const response = await client.send(command);
+      if (response.body) {
+        const json = JSON.parse(new TextDecoder().decode(response.body));
         const contentText = json.content?.[0]?.text;
         const parsed = JSON.parse(contentText);
         return {
@@ -121,6 +116,30 @@ export async function extractEvidenceWithBedrock(
     extractedFields.push(
       { field: 'university', value: 'Mumbai Institute of Technology', sourceLocation: 'Page 1, Letterhead', sourceExcerpt: 'Institution: Mumbai Institute of Technology (Affiliated with University of Mumbai)', confidence: 0.98 }
     );
+  } else if (documentName.includes('Hardware_Policy') || documentName.includes('Manager_Approval')) {
+    const isApproval = documentName.includes('Manager_Approval');
+    extractedFields.push(
+      { field: 'employee_name', value: 'Atharva Mendhulkar', sourceLocation: 'To Header', sourceExcerpt: 'Recipient: Atharva Mendhulkar', confidence: 0.99 },
+      { field: 'device_model', value: 'MacBook Pro 16-inch M3', sourceLocation: 'Paragraph 2', sourceExcerpt: 'Approved device: Apple MacBook Pro 16-inch', confidence: 0.98 },
+      { field: 'ram_spec', value: isApproval ? '36GB Unified Memory' : '18GB Unified Memory', sourceLocation: 'Spec Table', sourceExcerpt: isApproval ? '36GB Unified Memory' : '18GB Unified Memory', confidence: isApproval ? 0.98 : 0.94 },
+      { field: 'budget_amount', value: isApproval ? '$4,200' : '$3,500', sourceLocation: 'Budget Cap', sourceExcerpt: isApproval ? '$4,200 Cap' : '$3,500 Cap', confidence: 0.95 }
+    );
+  } else if (documentName.includes('Apollo_Hospital') || documentName.includes('Physician_Prescription')) {
+    const isBill = documentName.includes('Apollo_Hospital');
+    extractedFields.push(
+      { field: 'patient_name', value: 'Atharva Mendhulkar', sourceLocation: 'Patient Details', sourceExcerpt: 'Patient: Atharva Mendhulkar', confidence: 0.99 },
+      { field: 'hospital_name', value: 'Apollo Hospital Bangalore', sourceLocation: 'Header', sourceExcerpt: 'Apollo Hospital Bangalore', confidence: 0.98 },
+      { field: 'claim_amount', value: '₹45,200', sourceLocation: 'Invoice Total', sourceExcerpt: 'Invoice Total: ₹45,200', confidence: 0.98 },
+      { field: 'admission_date', value: isBill ? '2026-08-12' : '2026-08-10', sourceLocation: 'Dates', sourceExcerpt: isBill ? 'Admission: 2026-08-12' : 'Admission: 2026-08-10', confidence: 0.95 }
+    );
+  } else if (documentName.includes('HDFC_Bank') || documentName.includes('Contract_Service')) {
+    const isCheque = documentName.includes('HDFC_Bank');
+    extractedFields.push(
+      { field: 'vendor_name', value: 'Atharva Mendhulkar', sourceLocation: 'Beneficiary', sourceExcerpt: 'Payee: Atharva Mendhulkar', confidence: 0.99 },
+      { field: 'bank_name', value: 'HDFC Bank', sourceLocation: 'Branch', sourceExcerpt: 'HDFC Bank Ltd', confidence: 0.98 },
+      { field: 'account_number', value: '50100428912345', sourceLocation: 'A/C No', sourceExcerpt: 'A/C 50100428912345', confidence: 0.99 },
+      { field: 'ifsc_code', value: isCheque ? 'HDFC0000123' : 'HDFC0001890', sourceLocation: 'IFSC', sourceExcerpt: isCheque ? 'IFSC: HDFC0000123' : 'IFSC: HDFC0001890', confidence: 0.98 }
+    );
   }
 
   // Strict Zero-Hallucination Refusal for missing sensitive fields (PRD Section 18.3 & Section 20.3)
@@ -145,3 +164,51 @@ export async function extractEvidenceWithBedrock(
     mode: 'DEMO_FIXTURE'
   };
 }
+
+/**
+ * Universal Bedrock AI Invocation Helper (PRD Section 5 & 14)
+ * Powers Orchestrator intent classification, Form Filling semantic reasoning, and extraction.
+ */
+export async function invokeBedrock(
+  prompt: string,
+  systemPrompt?: string
+): Promise<string | null> {
+  const hasAwsCreds = Boolean(
+    (process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION) &&
+    ((process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) || process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI)
+  );
+
+  if (!hasAwsCreds || process.env.DEMO_MODE === 'true') {
+    return null;
+  }
+
+  try {
+    const client = new BedrockRuntimeClient({
+      region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1'
+    });
+
+    const command = new InvokeModelCommand({
+      modelId: BEDROCK_MODELS.primary,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 2048,
+        temperature: 0.0,
+        system: systemPrompt || BEDROCK_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const response = await client.send(command);
+    if (response.body) {
+      const json = JSON.parse(new TextDecoder().decode(response.body));
+      return json.content?.[0]?.text || null;
+    }
+  } catch (err) {
+    console.warn('Bedrock LLM call fell back to local reasoning:', err);
+  }
+
+  return null;
+}
+

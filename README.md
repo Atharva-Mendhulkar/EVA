@@ -479,6 +479,30 @@ SESSION_TTL_SECONDS=86400
 MAX_DOCUMENT_SIZE_MB=10
 ```
 
+### Deployment
+
+#### 1. Vercel Deployment (Frontend & Serverless Engine)
+EVA is optimized for zero-config Vercel deployment:
+- **Zero-Config Routing:** Next.js 16 routes `/api/v1/*` run on Vercel Serverless Functions.
+- **Client-Safe Fallback:** If deployed without AWS credentials or with `NEXT_PUBLIC_DEMO_MODE=true`, the engine automatically activates deterministic demo fixtures for live evaluations.
+- **Deploy Command:**
+  ```sh
+  npx vercel
+  ```
+
+#### 2. AWS Cloud Production Backend (CDK)
+For full enterprise cloud deployment with AWS managed services:
+- **AWS CDK v2 Deployment:**
+  ```sh
+  cd infra && cdk deploy
+  ```
+- **Provisions:**
+  - **AWS Step Functions:** Standard workflow with `.waitForTaskToken` human approval gate.
+  - **Amazon Bedrock:** Claude 3.5 Sonnet / Nova Pro prompt extraction runtime with Guardrails.
+  - **Amazon DynamoDB:** Single-table design (`PK SESSION#<id>`, `SK METADATA`) with native TTL.
+  - **Amazon S3 + AWS KMS:** Client-side envelope-encrypted document vault (`sse-kms`).
+  - **AWS Cedar Engine:** Declarative Policy Decision Point (PDP).
+
 Secrets must never be committed to the repository.
 
 Use AWS IAM, AWS Secrets Manager, or the deployment environment for sensitive configuration.
@@ -846,19 +870,48 @@ Responsibilities:
 
 The Orchestrator cannot bypass authorization.
 
-### Employment Domain Agent
+### Domain Agents
 
-The Employment Agent handles internship and employment onboarding workflows.
+EVA implements domain-specific reasoning agents conforming to the `IDomainAgent` interface, registered via the `DomainAgentRegistry`:
 
-Responsibilities include:
+#### 1. Employment Domain Agent
+- **Handles:** Internship onboarding, employment verification, academic credit agreements, offer letters.
+- **Key Evidence:** Offer letters, institutional NOCs, student profiles.
+- **Statutory Refusal:** Cannot bypass institutional verification or fabricate work authorizations.
 
-- interpreting employment-related goals
-- identifying required information
-- determining the onboarding workflow
-- identifying relevant evidence
-- producing workflow proposals
+#### 2. Government & Bureaucracy Agent
+- **Handles:** Civic clearance permits, municipal residency registration, identity document submission.
+- **Key Evidence:** National identity cards, proof of address, municipal records.
+- **Statutory Refusal:** Refuses to issue statutory permits without government verification; refuses requests to bypass legal identity mandates.
 
-It does not submit forms or authorize actions.
+#### 3. Healthcare Administration Agent
+- **Handles:** Insurance reimbursement claims, hospital discharge reconciliations, third-party administrator (TPA) submissions.
+- **Key Evidence:** Hospital invoices, clinical summaries, physician prescriptions.
+- **Statutory Refusal:** Refuses to alter clinical dates or diagnosis codes; refuses claims exceeding verified medical expense receipts.
+
+#### 4. Finance & Procurement Agent
+- **Handles:** Hardware procurement, vendor direct deposit updates, consultant invoicing.
+- **Key Evidence:** Cancelled cheques, master service agreements, manager exception approvals.
+- **Statutory Refusal:** Refuses unauthorized account alterations; strictly halts when banking coordinates (IFSC/MICR) conflict.
+
+#### 5. Education Domain Agent
+- **Handles:** Academic credential verification, transcript validation, institutional degree equivalency.
+- **Key Evidence:** Official transcripts, university registrar letters, degree certificates.
+- **Statutory Refusal:** Refuses to validate unsealed academic records; refuses GPA/grade alterations.
+
+#### 6. Legal & Compliance Agent
+- **Handles:** Master consulting agreements, non-disclosure compliance, regulatory statutory adherence.
+- **Key Evidence:** Signed contracts, corporate bylaws, compliance certifications.
+- **Statutory Refusal:** Refuses execution of unsigned legal instruments; refuses liability waivers without explicit human countersignature.
+
+### Workflow Planning Agent
+
+The **Workflow Planning Agent** answers the five fundamental operational questions before action execution:
+1. *What can I do?* (Discovers applicable workflows based on user intent)
+2. *What are my options?* (Explains paths, tradeoffs, and prerequisites)
+3. *What should I prepare?* (Lists mandatory verified documents and evidence citations)
+4. *What is missing?* (Pinpoints unfulfilled canonical fields and unresolved discrepancies)
+5. *What happens next?* (Details the deterministic path through Cedar authorization and human consent)
 
 ### Evidence Agent
 

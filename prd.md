@@ -188,13 +188,36 @@ EVA strictly separates **AI reasoning agents** from **deterministic infrastructu
   - Cannot read document ciphertext or plaintexts directly.
   - Stops immediately if intent confidence falls below 0.70.
 
-### 5.2 Employment Domain Agent
+### 5.2 Multi-Domain Agents Architecture
+EVA implements domain-specific reasoning agents conforming to the `IDomainAgent` interface, registered dynamically via `DomainAgentRegistry`:
+
+#### 5.2.1 Employment Domain Agent (P0 MVP)
 - **Framework:** Strands Agents SDK
 - **Role:** Understands regulatory, corporate, and academic onboarding requirements. Determines required canonical fields and supporting document prerequisites.
 - **Tools:** `get_required_fields`, `validate_document_checklist`, `compile_domain_plan`.
 - **Invariants:**
   - Operates strictly on document metadata and canonical schemas.
   - Emits canonical requirements: `full_name`, `university`, `employer`, `role`, `work_location`, `start_date`, and refusal canary `bank_account_number`.
+
+#### 5.2.2 Government & Bureaucracy Agent
+- **Role:** Evaluates municipal clearance, civic residency registration, and identity document submissions.
+- **Invariants:** Cannot fabricate national identity numbers or bypass statutory human verification.
+
+#### 5.2.3 Healthcare Administration Agent
+- **Role:** Reconciles hospital discharge summaries, itemized inpatient invoices, and insurance claim filings.
+- **Invariants:** Cannot alter diagnosis codes or clinical admission/discharge dates.
+
+#### 5.2.4 Finance & Procurement Agent
+- **Role:** Manages developer workstation procurement and vendor direct deposit payment authorizations.
+- **Invariants:** Cannot alter banking coordinates (IFSC/MICR) without verified bank proof.
+
+#### 5.2.5 Education Domain Agent
+- **Role:** Verifies degree certifications, institutional transcript equivalency, and registrar NOCs.
+- **Invariants:** Cannot certify unverified academic records or modify grading criteria.
+
+#### 5.2.6 Legal & Compliance Agent
+- **Role:** Analyzes consulting master agreements, non-disclosure compliance, and regulatory liability bounds.
+- **Invariants:** Cannot waive liability terms without human legal countersignature.
 
 ### 5.3 Evidence Agent
 - **Framework:** Strands Agents SDK
@@ -238,9 +261,19 @@ EVA strictly separates **AI reasoning agents** from **deterministic infrastructu
     value: string;
     sourceDocumentId: string;
     confidence: number;
-    rationale: string;
   }
   ```
+
+### 5.5 Workflow Planning Agent
+- **Role:** Bridges discovery and action preparation by synthesizing answers to the 5 core operational questions:
+  1. *What can I do?* (Workflow discovery matching intent to registered domain templates)
+  2. *What are my options?* (Exploration of choices, branches, and acceptable documents)
+  3. *What should I prepare?* (Checklists of authoritative evidence files and prerequisites)
+  4. *What is missing?* (Gaps in evidence or required fields before population can commence)
+  5. *What happens next?* (Clear sequence through reconciliation, Cedar authorization, and human consent)
+- **Invariants:**
+  - Cannot approve form execution or bypass human-in-the-loop gates.
+  - Explanations must strictly reflect actual Cedar policy conditions and comparator states.
 
 ---
 
@@ -867,3 +900,23 @@ Authorization: Bearer <sessionSecret>
 CONSISTENCY CHECK: PASS
 All architectural components, security primitives, agent responsibilities, and external dependencies are verified and internally consistent.
 ```
+
+---
+
+## 20. Deployment Architecture (AWS Cloud & Vercel Edge)
+
+### 20.1 Dual-Deployment Strategy
+EVA supports a dual deployment model designed for both frictionless hackathon evaluation and zero-trust enterprise production:
+
+1. **Vercel Edge & Serverless Deployment (Evaluation / Demo Mode):**
+   - **Frontend & API Routes:** Next.js 16 App Router hosted on Vercel Serverless.
+   - **Same-Origin API:** Routes under `/api/v1/*` proxy or execute in-memory state machines without CORS overhead.
+   - **Automatic Fallback:** When deployed without AWS credentials or when `NEXT_PUBLIC_DEMO_MODE=true`, the engine automatically activates deterministic Bedrock fallback fixtures and in-memory OCR, allowing full evaluation without cloud costs or IAM setup.
+
+2. **AWS Cloud Production Architecture (Enterprise Mode):**
+   - **Infrastructure as Code:** AWS CDK v2 TypeScript definitions (`cdk deploy`).
+   - **Compute:** AWS Lambda (API handlers) + Amazon ECS Fargate (Docling/OCR container parsing).
+   - **Orchestration:** AWS Step Functions Standard State Machine (`.waitForTaskToken` human approval gate).
+   - **Intelligence:** Amazon Bedrock (`anthropic.claude-3-5-sonnet` with Bedrock Guardrails).
+   - **Storage & Security:** Amazon DynamoDB (single-table session & metadata store with TTL) + Amazon S3 with AWS KMS client-side envelope encryption (`sse-kms`).
+   - **Authorization:** AWS Cedar Policy Decision Point (PDP).

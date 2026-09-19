@@ -116,6 +116,11 @@ export interface Conflict {
 export type CedarPrincipal =
   | 'EvaAgent::"orchestrator"'
   | 'EvaAgent::"employment"'
+  | 'EvaAgent::"government"'
+  | 'EvaAgent::"healthcare"'
+  | 'EvaAgent::"finance"'
+  | 'EvaAgent::"education"'
+  | 'EvaAgent::"legal"'
   | 'EvaAgent::"evidence"'
   | 'EvaAgent::"form_filling"'
   | 'EvaAgent::"form_execution"'
@@ -242,7 +247,15 @@ export interface FormField {
   status: 'empty' | 'populating' | 'verified';
 }
 
-export type OperationCategory = 'onboarding' | 'procurement' | 'medical' | 'financial' | 'custom';
+export type OperationCategory =
+  | 'onboarding'
+  | 'procurement'
+  | 'medical'
+  | 'financial'
+  | 'government'
+  | 'education'
+  | 'legal'
+  | 'custom';
 
 export interface WorkflowRun {
   workflowRunId: string;

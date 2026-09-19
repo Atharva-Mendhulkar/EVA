@@ -75,6 +75,25 @@ export function classifyIntent(intentText: string): string {
   ) {
     return 'internship_onboarding';
   }
+  if (
+    text.includes('government') ||
+    text.includes('civic') ||
+    text.includes('permit') ||
+    text.includes('municipal') ||
+    text.includes('residency') ||
+    text.includes('citizen')
+  ) {
+    return 'government_civic_clearance';
+  }
+  if (
+    text.includes('transcript') ||
+    text.includes('degree') ||
+    text.includes('credential') ||
+    text.includes('academic') ||
+    text.includes('university registrar')
+  ) {
+    return 'education_credential_verification';
+  }
   return 'custom_operation';
 }
 
@@ -319,11 +338,13 @@ export class WorkflowStore {
       title: dynamicTitle,
       category: templateConfig.category,
       targetSystem: dynamicTarget,
-      status: conflictResult.conflicts.length > 0 ? 'AWAITING_USER_RESOLUTION' : 'PLANNING',
-      currentStep: conflictResult.conflicts.length > 0 ? 'Resolve conflict' : 'Processing request',
-      stepIndex: 4,
+      status: conflictResult.conflicts.length > 0 ? 'AWAITING_USER_RESOLUTION' : (isCustom ? 'COMPLETED' : 'PLANNING'),
+      currentStep: conflictResult.conflicts.length > 0 ? 'Resolve conflict' : (isCustom ? 'Operation completed' : 'Processing request'),
+      stepIndex: isCustom ? 8 : (conflictResult.conflicts.length > 0 ? 4 : 5),
       awaitingAction: conflictResult.conflicts.length > 0 ? 'CONFLICT_RESOLUTION' : null,
-      plan: initialPlan,
+      plan: isCustom
+        ? initialPlan.map((s) => ({ ...s, status: 'COMPLETED' as const }))
+        : initialPlan,
       evidence: evidenceList,
       conflicts: conflictResult.conflicts,
       auditTrail: initialAudit,
@@ -833,4 +854,10 @@ export class WorkflowStore {
   }
 }
 
-export const workflowStore = new WorkflowStore();
+const globalForWorkflow = globalThis as unknown as {
+  evaWorkflowStore?: WorkflowStore;
+};
+
+export const workflowStore = globalForWorkflow.evaWorkflowStore ?? new WorkflowStore();
+globalForWorkflow.evaWorkflowStore = workflowStore;
+

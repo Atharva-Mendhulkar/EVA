@@ -4,8 +4,9 @@
 // Storage is interface-driven: InMemorySessionStore now, DynamoDB
 // single-table (PK SESSION#<id> / SK METADATA) later without changing callers.
 
-import { randomBytes, createHash, timingSafeEqual } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { SessionRecord } from '../engine/types';
+import { sha256Hex } from '../audit/chain';
 
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 86400);
 
@@ -13,10 +14,6 @@ export interface SessionStore {
   createSession(): { record: SessionRecord; sessionSecret: string };
   validateSession(sessionId: string, sessionSecret: string): SessionRecord | null;
   revokeSession(sessionId: string): boolean;
-}
-
-function sha256Hex(input: string): string {
-  return createHash('sha256').update(input, 'utf8').digest('hex');
 }
 
 export class InMemorySessionStore implements SessionStore {
@@ -60,7 +57,13 @@ export class InMemorySessionStore implements SessionStore {
   }
 }
 
-export const sessionStore = new InMemorySessionStore();
+const globalForSession = globalThis as unknown as {
+  evaSessionStore?: InMemorySessionStore;
+};
+
+export const sessionStore = globalForSession.evaSessionStore ?? new InMemorySessionStore();
+globalForSession.evaSessionStore = sessionStore;
+
 
 /** Extracts and validates session credentials from PRD Section 13 headers. */
 export function requireSession(req: Request): SessionRecord | null {

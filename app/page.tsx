@@ -15,6 +15,7 @@ import {
   Cpu,
   Wrench,
   RotateCcw,
+  Sparkles,
   X
 } from 'lucide-react';
 import { AgentProgress } from '@/components/AgentProgress';
@@ -134,18 +135,26 @@ export default function Page() {
   };
 
   // Fetch workflow state on mount and hydrate
-  const fetchWorkflow = async () => {
+  const fetchWorkflow = async (explicitRunId?: string) => {
     try {
-      // 1. Fetch active workflow
-      const res = await apiFetch('/api/v1/workflows');
-      if (res.ok) {
-        const data: WorkflowRun | null = await res.json();
-        if (data && data.workflowRunId) {
-          setWorkflow(data);
-          if (data.intent && !promptText && typeof window !== 'undefined' && sessionStorage.getItem('eva_started') === 'true') {
-            setPromptText(data.intent);
+      // 1. Fetch active workflow scoped to current session or explicit selection
+      const targetId = explicitRunId || workflow?.workflowRunId || (sessionRunIds.length > 0 ? sessionRunIds[0] : null);
+
+      if (targetId) {
+        const res = await apiFetch(`/api/v1/workflows/${targetId}`);
+        if (res.ok) {
+          const data: WorkflowRun | null = await res.json();
+          if (data && data.workflowRunId) {
+            setWorkflow(data);
+            if (data.intent && !promptText && typeof window !== 'undefined' && sessionStorage.getItem('eva_started') === 'true') {
+              setPromptText(data.intent);
+            }
+          } else {
+            setWorkflow(null);
           }
-        } else {
+        }
+      } else {
+        if (typeof window !== 'undefined' && sessionStorage.getItem('eva_started') !== 'true') {
           setWorkflow(null);
         }
       }
@@ -237,7 +246,7 @@ export default function Page() {
         setPromptText(active.intent);
         setStarted(true);
         if (typeof window !== 'undefined') {
-          sessionStorage.setItem('nexus_started', 'true');
+          sessionStorage.setItem('eva_started', 'true');
         }
         setShowConflictModal(false);
         if (active.conflicts && active.conflicts.some((c) => c.status === 'open') && active.status === 'AWAITING_USER_RESOLUTION') {
@@ -262,7 +271,6 @@ export default function Page() {
   const handleNewOperation = () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('eva_started');
-      sessionStorage.removeItem('nexus_started');
     }
     setStarted(false);
     setPromptText('');
@@ -343,7 +351,7 @@ export default function Page() {
     try {
       setIsResetting(true);
       if (typeof window !== 'undefined') {
-        sessionStorage.removeItem('nexus_started');
+        sessionStorage.removeItem('eva_started');
       }
       const res = await apiFetch(`/api/v1/workflows/${workflow?.workflowRunId || 'run_demo_01'}/reset`, { method: 'POST' });
       if (res.ok) {
@@ -547,7 +555,7 @@ export default function Page() {
               </div>
 
               <p className="text-[11px] text-zinc-500 mt-8 font-mono">
-                Evidence before action · Real Cedar Policy Enforcement · AWS Serverless · 16 Shooting Stars Active
+                Evidence before action · AWS Serverless · 16 Shooting Stars Active
               </p>
             </main>
           ) : (

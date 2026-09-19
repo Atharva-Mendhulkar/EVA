@@ -2,8 +2,15 @@ import { describe, it, expect } from 'vitest';
 import {
   orchestratorAgent,
   employmentAgent,
+  governmentAgent,
+  healthcareAgent,
+  financeAgent,
+  educationAgent,
+  legalAgent,
+  workflowPlanningAgent,
   evidenceAgent,
-  formFillingAgent
+  formFillingAgent,
+  domainRegistry
 } from '../lib/agents';
 import { getSeedEvidence } from '../lib/engine/fixtures';
 
@@ -149,6 +156,79 @@ describe('EVA 4-Agent Architecture (PRD Section 5)', () => {
         workflow_scope: 'internship_onboarding'
       });
       expect(allowed.decision).toBe('ALLOW');
+    });
+  });
+
+  describe('5. Multi-Domain Agents & Domain Registry', () => {
+    it('registers all enterprise domain agents in the DomainAgentRegistry', () => {
+      const domains = domainRegistry.listDomains();
+      expect(domains).toContain('employment');
+      expect(domains).toContain('government');
+      expect(domains).toContain('healthcare');
+      expect(domains).toContain('finance');
+      expect(domains).toContain('education');
+      expect(domains).toContain('legal');
+    });
+
+    it('routes orchestrator domain selection to proper domain agents', async () => {
+      expect(await orchestratorAgent.select_domain_agent('internship_onboarding')).toBe('employment');
+      expect(await orchestratorAgent.select_domain_agent('government_civic_clearance')).toBe('government');
+      expect(await orchestratorAgent.select_domain_agent('medical_reimbursement')).toBe('healthcare');
+      expect(await orchestratorAgent.select_domain_agent('hardware_procurement')).toBe('finance');
+      expect(await orchestratorAgent.select_domain_agent('vendor_payout_update')).toBe('finance');
+      expect(await orchestratorAgent.select_domain_agent('education_credential_verification')).toBe('education');
+    });
+
+    it('government agent enforces statutory refusal canary tax_identification_number', async () => {
+      const fields = await governmentAgent.get_required_fields('government_civic_clearance');
+      expect(fields).toContain('full_name');
+      expect(fields).toContain('tax_identification_number');
+      const plan = await governmentAgent.compile_domain_plan('government_civic_clearance', 'Citizen filing');
+      expect(plan).toHaveLength(8);
+      expect(plan[0].detail).toContain('Citizen Goal');
+    });
+
+    it('healthcare agent enforces patient_medical_record_number refusal canary', async () => {
+      const fields = await healthcareAgent.get_required_fields('medical_reimbursement');
+      expect(fields).toContain('patient_medical_record_number');
+    });
+
+    it('finance agent enforces corporate_swift_code refusal canary', async () => {
+      const fields = await financeAgent.get_required_fields('vendor_payout_update');
+      expect(fields).toContain('corporate_swift_code');
+    });
+
+    it('education agent enforces student_enrollment_pin refusal canary', async () => {
+      const fields = await educationAgent.get_required_fields('education_credential_verification');
+      expect(fields).toContain('student_enrollment_pin');
+    });
+
+    it('legal agent enforces attorney_client_privilege_token refusal canary', async () => {
+      const fields = await legalAgent.get_required_fields('internship_onboarding');
+      expect(fields).toContain('attorney_client_privilege_token');
+    });
+  });
+
+  describe('6. Recommendation & Workflow Planning Agent', () => {
+    it('generates actionable options answering what can I do and what is missing', async () => {
+      const rec = await workflowPlanningAgent.plan_workflow_options(
+        'Starting an internship in Bangalore',
+        'employment',
+        ['doc_profile_01']
+      );
+      expect(rec.domain).toBe('employment');
+      expect(rec.options.length).toBeGreaterThanOrEqual(2);
+      expect(rec.missingPrerequisites).toContain('doc_offer_03');
+      expect(rec.nextSteps.some((s) => s.includes('missing'))).toBe(true);
+    });
+
+    it('orchestrator provides unified workflow recommendations', async () => {
+      const rec = await orchestratorAgent.get_workflow_recommendations(
+        'Need to file municipal civic permit',
+        'government_civic_clearance'
+      );
+      expect(rec.domain).toBe('government');
+      expect(rec.options[0].title).toContain('Government Civic Clearance');
     });
   });
 });
