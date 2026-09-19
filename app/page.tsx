@@ -12,6 +12,7 @@ import {
   Pin,
   Paperclip,
   Globe,
+  Search,
   ClipboardList,
   Cpu,
   Wrench,
@@ -118,8 +119,13 @@ export default function Page() {
   ]);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const [mcpMenuOpen, setMcpMenuOpen] = useState(false);
+  const [searchMenuOpen, setSearchMenuOpen] = useState(false);
+  const [formFillMenuOpen, setFormFillMenuOpen] = useState(false);
+
   const [dockedToolsMenuOpen, setDockedToolsMenuOpen] = useState(false);
   const [dockedMcpMenuOpen, setDockedMcpMenuOpen] = useState(false);
+  const [dockedSearchMenuOpen, setDockedSearchMenuOpen] = useState(false);
+  const [dockedFormFillMenuOpen, setDockedFormFillMenuOpen] = useState(false);
 
   const landingFileInputRef = React.useRef<HTMLInputElement>(null);
   const followUpFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -717,7 +723,13 @@ export default function Page() {
                       handleStartWorkflow(promptText);
                     }
                   }}
-                  placeholder="Ask EVA anything or describe your operational goal..."
+                  placeholder={
+                    enableFormFill
+                      ? "Paste Google Form or Web Form URL (e.g. https://docs.google.com/forms/...) to auto-fill..."
+                      : enableSearch
+                      ? "Search the web for real-time intelligence, policies, or facts..."
+                      : "Ask EVA anything or paste a Google Form link to auto-fill..."
+                  }
                   aria-label="Workflow prompt input"
                 />
 
@@ -732,7 +744,7 @@ export default function Page() {
 
                 <div className="composer-capsule-footer">
                   <div className="capsule-pills-left flex flex-wrap items-center gap-1.5">
-                    {/* Attach (Pin) */}
+                    {/* 1. Attach */}
                     <button
                       type="button"
                       onClick={() => landingFileInputRef.current?.click()}
@@ -743,39 +755,206 @@ export default function Page() {
                     >
                       <Pin className="w-3.5 h-3.5" />
                       <span className="text-xs">Attach</span>
+                      {uploadedFiles.length > 0 && (
+                        <span className="pill-counter">({uploadedFiles.length})</span>
+                      )}
                     </button>
 
-                    {/* Search (Globe) */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableSearch(!enableSearch)}
-                      className={`capsule-pill ${enableSearch ? 'active' : ''}`}
-                      title="Toggle Grounded Vector Search"
-                      aria-label="Toggle grounded search"
-                    >
-                      <Globe className="w-3.5 h-3.5" />
-                      <span className="text-xs">Search</span>
-                    </button>
+                    {/* 2. Search */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !enableSearch;
+                          setEnableSearch(next);
+                          if (next) {
+                            setEnableFormFill(false);
+                            setSearchMenuOpen(true);
+                          } else {
+                            setSearchMenuOpen(false);
+                          }
+                          setFormFillMenuOpen(false);
+                          setMcpMenuOpen(false);
+                          setToolsMenuOpen(false);
+                        }}
+                        className={`capsule-pill ${enableSearch ? 'active' : ''}`}
+                        title="Toggle Grounded Web Search"
+                        aria-label="Toggle grounded search"
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                        <span className="text-xs">Search</span>
+                      </button>
 
-                    {/* Form Fill (Form icon) */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableFormFill(!enableFormFill)}
-                      className={`capsule-pill ${enableFormFill ? 'active' : ''}`}
-                      title="Toggle Autonomous Form Filling"
-                      aria-label="Toggle autonomous form filling"
-                    >
-                      <ClipboardList className="w-3.5 h-3.5" />
-                      <span className="text-xs">Form Fill</span>
-                    </button>
+                      {searchMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 w-80 z-[60]">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <Globe className="w-3.5 h-3.5 text-[#38bdf8]" />
+                              <span className="text-xs font-medium text-white">Web Intelligence Search</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = !enableSearch;
+                                  setEnableSearch(next);
+                                  if (next) setEnableFormFill(false);
+                                }}
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition ${
+                                  enableSearch
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-medium'
+                                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white'
+                                }`}
+                              >
+                                {enableSearch ? 'Active' : 'Disabled'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSearchMenuOpen(false)}
+                                className="text-white/40 hover:text-white p-0.5 transition"
+                                aria-label="Close search menu"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
 
-                    {/* MCP Menu Toggle */}
+                          <p className="text-[11px] text-white/60 leading-tight mb-2.5">
+                            Ground answers with real-time web research, regulatory benchmarks & live facts.
+                          </p>
+
+                          <div className="space-y-1 mb-2.5">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">Quick Search Queries</div>
+                            {[
+                              'Remote engineering equipment stipend benchmarks in 2026',
+                              'Corporate travel per diem and accommodation guidelines',
+                              'Cedar distributed policy authorization syntax examples'
+                            ].map((q, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setPromptText(q);
+                                  setEnableSearch(true);
+                                  setEnableFormFill(false);
+                                  setSearchMenuOpen(false);
+                                }}
+                                className="w-full text-left p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-[11px] text-white/80 hover:text-white transition flex items-center gap-2 group"
+                              >
+                                <Search className="w-3 h-3 text-[#38bdf8] shrink-0 group-hover:scale-110 transition" />
+                                <span className="truncate">{q}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10px] font-mono text-white/40">
+                            <span>Live Web Grounding</span>
+                            <span>Search Agent Active</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Form Fill */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !enableFormFill;
+                          setEnableFormFill(next);
+                          if (next) {
+                            setEnableSearch(false);
+                            setFormFillMenuOpen(true);
+                          } else {
+                            setFormFillMenuOpen(false);
+                          }
+                          setSearchMenuOpen(false);
+                          setMcpMenuOpen(false);
+                          setToolsMenuOpen(false);
+                        }}
+                        className={`capsule-pill ${enableFormFill ? 'active' : ''}`}
+                        title="Toggle Autonomous Form Filling"
+                        aria-label="Toggle autonomous form filling"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        <span className="text-xs">Form Fill</span>
+                      </button>
+
+                      {formFillMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 w-80 z-[60]">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <ClipboardList className="w-3.5 h-3.5 text-[#a78bfa]" />
+                              <span className="text-xs font-medium text-white">Autonomous Form Fill</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = !enableFormFill;
+                                  setEnableFormFill(next);
+                                  if (next) setEnableSearch(false);
+                                }}
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition ${
+                                  enableFormFill
+                                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 font-medium'
+                                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white'
+                                }`}
+                              >
+                                {enableFormFill ? 'Active' : 'Disabled'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFormFillMenuOpen(false)}
+                                className="text-white/40 hover:text-white p-0.5 transition"
+                                aria-label="Close form fill menu"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-white/60 leading-tight mb-2.5">
+                            Paste any Google Form link into the prompt. EVA inspects fields, grounds facts from your vault, and completes submission.
+                          </p>
+
+                          <div className="space-y-1 mb-2.5">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">Quick Sample Form</div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPromptText('https://docs.google.com/forms/d/e/1FAIpQLSc_application_demo/viewform fill this form for me');
+                                setEnableFormFill(true);
+                                setEnableSearch(false);
+                                setFormFillMenuOpen(false);
+                              }}
+                              className="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-[11px] text-white/80 hover:text-white transition flex items-center gap-2 group"
+                            >
+                              <ClipboardList className="w-3.5 h-3.5 text-[#a78bfa] shrink-0 group-hover:scale-110 transition" />
+                              <div className="min-w-0">
+                                <div className="font-medium text-white">Fill Google Form Demo</div>
+                                <div className="text-[10px] text-white/40 font-mono truncate">docs.google.com/forms/...</div>
+                              </div>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10px] font-mono text-white/40">
+                            <span>Google Forms & Web Forms</span>
+                            <span>Playwright Engine</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. MCP Menu Toggle */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={() => {
                           setMcpMenuOpen(!mcpMenuOpen);
                           setToolsMenuOpen(false);
+                          setSearchMenuOpen(false);
+                          setFormFillMenuOpen(false);
                         }}
                         className={`capsule-pill ${selectedMcp.length > 0 ? 'active' : ''}`}
                         title="Configure Model Context Protocol (MCP)"
@@ -784,12 +963,12 @@ export default function Page() {
                         <Cpu className="w-3.5 h-3.5" />
                         <span className="text-xs">MCP</span>
                         {selectedMcp.length > 0 && (
-                          <span className="text-[10px] font-mono text-white/60 ml-0.5">({selectedMcp.length})</span>
+                          <span className="pill-counter">({selectedMcp.length})</span>
                         )}
                       </button>
 
                       {mcpMenuOpen && (
-                        <div className="popover-menu-container bottom-full mb-2.5 left-0">
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 z-[60]">
                           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
                             <div className="flex items-center gap-1.5">
                               <Cpu className="w-3.5 h-3.5 text-white/70" />
@@ -828,13 +1007,15 @@ export default function Page() {
                       )}
                     </div>
 
-                    {/* Tools Menu Toggle */}
+                    {/* 5. Tools Menu Toggle */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={() => {
                           setToolsMenuOpen(!toolsMenuOpen);
                           setMcpMenuOpen(false);
+                          setSearchMenuOpen(false);
+                          setFormFillMenuOpen(false);
                         }}
                         className={`capsule-pill ${selectedTools.length > 0 ? 'active' : ''}`}
                         title="Configure Domain Agents"
@@ -843,12 +1024,12 @@ export default function Page() {
                         <Wrench className="w-3.5 h-3.5" />
                         <span className="text-xs">Domain Agents</span>
                         {selectedTools.length > 0 && (
-                          <span className="text-[10px] font-mono text-white/60 ml-0.5">({selectedTools.length})</span>
+                          <span className="pill-counter">({selectedTools.length})</span>
                         )}
                       </button>
 
                       {toolsMenuOpen && (
-                        <div className="popover-menu-container bottom-full mb-2.5 left-0">
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 z-[60]">
                           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
                             <div className="flex items-center gap-1.5">
                               <Wrench className="w-3.5 h-3.5 text-white/70" />
@@ -902,34 +1083,6 @@ export default function Page() {
                     )}
                   </button>
                 </div>
-              </div>
-
-              {/* Dynamic Capability Quick Suggestions */}
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
-                <button
-                  type="button"
-                  onClick={() => setPromptText('https://docs.google.com/forms/d/e/1FAIpQLSc_application_demo/viewform fill this form for me')}
-                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 font-mono flex items-center gap-1.5 transition"
-                >
-                  <ClipboardList className="w-3.5 h-3.5 text-[#a78bfa]" />
-                  <span>Fill Google Form Link</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPromptText('Search the web for remote engineering equipment stipend benchmarks in 2026')}
-                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 font-mono flex items-center gap-1.5 transition"
-                >
-                  <Globe className="w-3.5 h-3.5 text-[#38bdf8]" />
-                  <span>Web Intelligence Search</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPromptText('Hello EVA, what administrative operations can you run for me?')}
-                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-zinc-300 font-mono flex items-center gap-1.5 transition"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#34d399]" />
-                  <span>Ask EVA Anything</span>
-                </button>
               </div>
 
               <p className="text-[11px] text-zinc-500 mt-8 font-mono">
@@ -1297,57 +1450,271 @@ export default function Page() {
                   />
 
                   <div className="bottom-docked-input-row">
-                    {/* Attach (Pin) */}
+                    <input
+                      type="text"
+                      value={followUpText}
+                      onChange={(e) => setFollowUpText(e.target.value)}
+                      placeholder={
+                        enableFormFill
+                          ? "Paste Google Form or Web Form URL to auto-fill..."
+                          : enableSearch
+                          ? "Search the web for real-time intelligence, policies, or facts..."
+                          : "Reply to EVA, ask follow-up, search web, or give instructions..."
+                      }
+                      className="bottom-input"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && followUpText.trim() && !isLoading) {
+                          handleSendFollowUp(followUpText);
+                        }
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (followUpText.trim() && !isLoading) {
+                          handleSendFollowUp(followUpText);
+                        }
+                      }}
+                      disabled={!followUpText.trim() || isLoading}
+                      className="action-circle-btn shrink-0"
+                      aria-label="Send message"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-black" />
+                      ) : (
+                        <ArrowUp className="w-4 h-4 text-black" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Docked Pills Row - Exact 5 buttons matching Landing View */}
+                  <div className="capsule-pills-left flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-white/5">
+                    {/* 1. Attach */}
                     <button
                       type="button"
                       onClick={() => followUpFileInputRef.current?.click()}
                       disabled={isUploadingInChat}
-                      className={`docked-cap-btn ${uploadedFiles.length > 0 ? 'active' : ''}`}
+                      className={`capsule-pill ${uploadedFiles.length > 0 ? 'active' : ''}`}
                       title="Upload & Attach Document (In-Memory OCR)"
                       aria-label="Attach document"
                     >
-                      <Pin className="w-4 h-4" />
+                      <Pin className="w-3.5 h-3.5" />
+                      <span className="text-xs">Attach</span>
+                      {uploadedFiles.length > 0 && (
+                        <span className="pill-counter">({uploadedFiles.length})</span>
+                      )}
                     </button>
 
-                    {/* Search Globe Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableSearch(!enableSearch)}
-                      className={`docked-cap-btn ${enableSearch ? 'active' : ''}`}
-                      title="Toggle Grounded Vector Search"
-                      aria-label="Search"
-                    >
-                      <Globe className="w-4 h-4" />
-                    </button>
+                    {/* 2. Search */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !enableSearch;
+                          setEnableSearch(next);
+                          if (next) {
+                            setEnableFormFill(false);
+                            setDockedSearchMenuOpen(true);
+                          } else {
+                            setDockedSearchMenuOpen(false);
+                          }
+                          setDockedFormFillMenuOpen(false);
+                          setDockedMcpMenuOpen(false);
+                          setDockedToolsMenuOpen(false);
+                        }}
+                        className={`capsule-pill ${enableSearch ? 'active' : ''}`}
+                        title="Toggle Grounded Web Search"
+                        aria-label="Toggle grounded search"
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                        <span className="text-xs">Search</span>
+                      </button>
 
-                    {/* Form Fill Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setEnableFormFill(!enableFormFill)}
-                      className={`docked-cap-btn ${enableFormFill ? 'active' : ''}`}
-                      title="Toggle Autonomous Form Filling"
-                      aria-label="Form Fill"
-                    >
-                      <ClipboardList className="w-4 h-4" />
-                    </button>
+                      {dockedSearchMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 w-80 z-[60]">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <Globe className="w-3.5 h-3.5 text-[#38bdf8]" />
+                              <span className="text-xs font-medium text-white">Web Intelligence Search</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = !enableSearch;
+                                  setEnableSearch(next);
+                                  if (next) setEnableFormFill(false);
+                                }}
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition ${
+                                  enableSearch
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-medium'
+                                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white'
+                                }`}
+                              >
+                                {enableSearch ? 'Active' : 'Disabled'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDockedSearchMenuOpen(false)}
+                                className="text-white/40 hover:text-white p-0.5 transition"
+                                aria-label="Close search menu"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
 
-                    {/* MCP Menu Toggle */}
+                          <p className="text-[11px] text-white/60 leading-tight mb-2.5">
+                            Ground answers with real-time web research, regulatory benchmarks & live facts.
+                          </p>
+
+                          <div className="space-y-1 mb-2.5">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">Quick Search Queries</div>
+                            {[
+                              'Remote engineering equipment stipend benchmarks in 2026',
+                              'Corporate travel per diem and accommodation guidelines',
+                              'Cedar distributed policy authorization syntax examples'
+                            ].map((q, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setFollowUpText(q);
+                                  setEnableSearch(true);
+                                  setEnableFormFill(false);
+                                  setDockedSearchMenuOpen(false);
+                                }}
+                                className="w-full text-left p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-[11px] text-white/80 hover:text-white transition flex items-center gap-2 group"
+                              >
+                                <Search className="w-3 h-3 text-[#38bdf8] shrink-0 group-hover:scale-110 transition" />
+                                <span className="truncate">{q}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10px] font-mono text-white/40">
+                            <span>Live Web Grounding</span>
+                            <span>Search Agent Active</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Form Fill */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !enableFormFill;
+                          setEnableFormFill(next);
+                          if (next) {
+                            setEnableSearch(false);
+                            setDockedFormFillMenuOpen(true);
+                          } else {
+                            setDockedFormFillMenuOpen(false);
+                          }
+                          setDockedSearchMenuOpen(false);
+                          setDockedMcpMenuOpen(false);
+                          setDockedToolsMenuOpen(false);
+                        }}
+                        className={`capsule-pill ${enableFormFill ? 'active' : ''}`}
+                        title="Toggle Autonomous Form Filling"
+                        aria-label="Toggle autonomous form filling"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        <span className="text-xs">Form Fill</span>
+                      </button>
+
+                      {dockedFormFillMenuOpen && (
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 w-80 z-[60]">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                            <div className="flex items-center gap-1.5">
+                              <ClipboardList className="w-3.5 h-3.5 text-[#a78bfa]" />
+                              <span className="text-xs font-medium text-white">Autonomous Form Fill</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = !enableFormFill;
+                                  setEnableFormFill(next);
+                                  if (next) setEnableSearch(false);
+                                }}
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition ${
+                                  enableFormFill
+                                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 font-medium'
+                                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white'
+                                }`}
+                              >
+                                {enableFormFill ? 'Active' : 'Disabled'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDockedFormFillMenuOpen(false)}
+                                className="text-white/40 hover:text-white p-0.5 transition"
+                                aria-label="Close form fill menu"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-white/60 leading-tight mb-2.5">
+                            Paste any Google Form link into the prompt. EVA inspects fields, grounds facts from your vault, and completes submission.
+                          </p>
+
+                          <div className="space-y-1 mb-2.5">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-white/40">Quick Sample Form</div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFollowUpText('https://docs.google.com/forms/d/e/1FAIpQLSc_application_demo/viewform fill this form for me');
+                                setEnableFormFill(true);
+                                setEnableSearch(false);
+                                setDockedFormFillMenuOpen(false);
+                              }}
+                              className="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-[11px] text-white/80 hover:text-white transition flex items-center gap-2 group"
+                            >
+                              <ClipboardList className="w-3.5 h-3.5 text-[#a78bfa] shrink-0 group-hover:scale-110 transition" />
+                              <div className="min-w-0">
+                                <div className="font-medium text-white">Fill Google Form Demo</div>
+                                <div className="text-[10px] text-white/40 font-mono truncate">docs.google.com/forms/...</div>
+                              </div>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10px] font-mono text-white/40">
+                            <span>Google Forms & Web Forms</span>
+                            <span>Playwright Engine</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. MCP Menu Toggle */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={() => {
                           setDockedMcpMenuOpen(!dockedMcpMenuOpen);
                           setDockedToolsMenuOpen(false);
+                          setDockedSearchMenuOpen(false);
+                          setDockedFormFillMenuOpen(false);
                         }}
-                        className={`docked-cap-btn ${selectedMcp.length > 0 ? 'active' : ''}`}
+                        className={`capsule-pill ${selectedMcp.length > 0 ? 'active' : ''}`}
                         title="Configure Model Context Protocol (MCP)"
-                        aria-label="MCP"
+                        aria-label="Toggle MCP menu"
                       >
-                        <Cpu className="w-4 h-4" />
+                        <Cpu className="w-3.5 h-3.5" />
+                        <span className="text-xs">MCP</span>
+                        {selectedMcp.length > 0 && (
+                          <span className="pill-counter">({selectedMcp.length})</span>
+                        )}
                       </button>
 
                       {dockedMcpMenuOpen && (
-                        <div className="popover-menu-container bottom-full mb-3 left-0">
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 z-[60]">
                           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
                             <div className="flex items-center gap-1.5">
                               <Cpu className="w-3.5 h-3.5 text-white/70" />
@@ -1386,23 +1753,29 @@ export default function Page() {
                       )}
                     </div>
 
-                    {/* Tools Menu Toggle */}
+                    {/* 5. Tools Menu Toggle */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={() => {
                           setDockedToolsMenuOpen(!dockedToolsMenuOpen);
                           setDockedMcpMenuOpen(false);
+                          setDockedSearchMenuOpen(false);
+                          setDockedFormFillMenuOpen(false);
                         }}
-                        className={`docked-cap-btn ${selectedTools.length > 0 ? 'active' : ''}`}
+                        className={`capsule-pill ${selectedTools.length > 0 ? 'active' : ''}`}
                         title="Configure Domain Agents"
-                        aria-label="Domain Agents"
+                        aria-label="Toggle Domain Agents menu"
                       >
-                        <Wrench className="w-4 h-4" />
+                        <Wrench className="w-3.5 h-3.5" />
+                        <span className="text-xs">Domain Agents</span>
+                        {selectedTools.length > 0 && (
+                          <span className="pill-counter">({selectedTools.length})</span>
+                        )}
                       </button>
 
                       {dockedToolsMenuOpen && (
-                        <div className="popover-menu-container bottom-full mb-3 left-0">
+                        <div className="popover-menu-container bottom-full mb-2.5 left-0 z-[60]">
                           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
                             <div className="flex items-center gap-1.5">
                               <Wrench className="w-3.5 h-3.5 text-white/70" />
@@ -1440,33 +1813,6 @@ export default function Page() {
                         </div>
                       )}
                     </div>
-
-                    <input
-                      type="text"
-                      value={followUpText}
-                      onChange={(e) => setFollowUpText(e.target.value)}
-                      placeholder="Reply to EVA, ask follow-up, search web, or give instructions..."
-                      className="bottom-input"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && followUpText.trim()) {
-                          handleSendFollowUp(followUpText);
-                        }
-                      }}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (followUpText.trim()) {
-                          handleSendFollowUp(followUpText);
-                        }
-                      }}
-                      disabled={!followUpText.trim() || isLoading}
-                      className="action-circle-btn shrink-0"
-                      aria-label="Send message"
-                    >
-                      <ArrowUp className="w-4 h-4 text-black" />
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1474,6 +1820,25 @@ export default function Page() {
           )}
         </div>
       </div>
+
+      {/* Popover Backdrop for Outside Click Dismissal */}
+      {(searchMenuOpen || formFillMenuOpen || mcpMenuOpen || toolsMenuOpen ||
+        dockedSearchMenuOpen || dockedFormFillMenuOpen || dockedMcpMenuOpen || dockedToolsMenuOpen) && (
+        <div
+          className="fixed inset-0 z-50 bg-transparent"
+          onClick={() => {
+            setSearchMenuOpen(false);
+            setFormFillMenuOpen(false);
+            setMcpMenuOpen(false);
+            setToolsMenuOpen(false);
+            setDockedSearchMenuOpen(false);
+            setDockedFormFillMenuOpen(false);
+            setDockedMcpMenuOpen(false);
+            setDockedToolsMenuOpen(false);
+          }}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Conflict Modal */}
       {started && openConflict && showConflictModal && (

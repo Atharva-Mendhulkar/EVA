@@ -410,6 +410,22 @@ button, textarea, input {
   stroke: #000000 !important;
 }
 
+.capsule-pill.active span {
+  color: #000000 !important;
+}
+
+.capsule-pill .pill-counter {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  margin-left: 3px;
+  font-weight: 500;
+}
+
+.capsule-pill.active .pill-counter {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
 .docked-cap-btn {
   display: flex;
   align-items: center;
