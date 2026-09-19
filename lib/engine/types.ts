@@ -1,14 +1,36 @@
-// NEXUS Core Domain & Engine Types
+// EVA Core Domain & Engine Types
 // Central Product Principle: EVIDENCE -> RECONCILIATION -> AUTHORIZATION -> ACTION -> AUDIT
 
 export type CanonicalField =
+  // Onboarding
   | 'full_name'
   | 'university'
   | 'employer'
   | 'role'
   | 'work_location'
   | 'start_date'
-  | 'bank_account_number'; // Used for critical negative hallucination test
+  // Hardware Procurement
+  | 'employee_name'
+  | 'device_model'
+  | 'ram_spec'
+  | 'storage_spec'
+  | 'budget_amount'
+  | 'department_code'
+  // Medical Claim
+  | 'patient_name'
+  | 'insurance_policy_id'
+  | 'hospital_name'
+  | 'claim_amount'
+  | 'admission_date'
+  | 'discharge_date'
+  // Vendor Payout
+  | 'vendor_name'
+  | 'account_number'
+  | 'ifsc_code'
+  | 'bank_name'
+  | 'payout_currency'
+  // Negative test field
+  | 'bank_account_number';
 
 export interface Evidence {
   evidenceId: string;
@@ -46,9 +68,18 @@ export interface Conflict {
 }
 
 export type CedarPrincipal =
+  | 'EvaAgent::"orchestrator"'
+  | 'EvaAgent::"planner"'
+  | 'EvaAgent::"search"'
+  | 'EvaAgent::"document_evidence"'
+  | 'EvaAgent::"form_execution"'
+  | 'EvaAgent::"compliance_auditor"'
   | 'NexusAgent::"orchestrator"'
+  | 'NexusAgent::"planner"'
+  | 'NexusAgent::"search"'
   | 'NexusAgent::"document_evidence"'
   | 'NexusAgent::"form_execution"'
+  | 'NexusAgent::"compliance_auditor"'
   | `User::"${string}"`;
 
 export type CedarAction =
@@ -59,6 +90,10 @@ export type CedarAction =
 
 export type CedarResource =
   | 'Form::"internship_onboarding"'
+  | 'Form::"hardware_procurement"'
+  | 'Form::"medical_reimbursement"'
+  | 'Form::"vendor_payout_update"'
+  | `Form::"${string}"`
   | `Document::"${string}"`;
 
 export interface CedarContext {
@@ -160,11 +195,16 @@ export interface FormField {
   status: 'empty' | 'populating' | 'verified';
 }
 
+export type OperationCategory = 'onboarding' | 'procurement' | 'medical' | 'financial' | 'custom';
+
 export interface WorkflowRun {
   workflowRunId: string;
   userId: string;
   intent: string;
   template: string;
+  title?: string;
+  category?: OperationCategory;
+  targetSystem?: string;
   status: WorkflowStatus;
   currentStep: string;
   stepIndex: number;
@@ -189,3 +229,80 @@ export interface DocumentMetadata {
   sensitivity: 'standard' | 'financial' | 'identity';
   description: string;
 }
+
+export interface ProvenanceTag {
+  evidenceId: string;
+  sourceDocumentName: string;
+  sourceLocation: string;
+  confidence: number;
+  userConfirmed: boolean;
+}
+
+export interface VaultSearchResult {
+  documentId: string;
+  name: string;
+  relevanceScore: number;
+  s3Key: string;
+  tags: string[];
+  updatedAt: string;
+  isFresh: boolean;
+}
+
+export interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  timestamp: string;
+  isUntrusted: true;
+}
+
+export interface RankedDocument {
+  documentId: string;
+  name: string;
+  score: number;
+  reasons: string[];
+}
+
+export interface AuditViolation {
+  type: 'MISSING_EVENT' | 'CHRONOLOGY_ERROR' | 'CEDAR_INCONSISTENCY' | 'HALLUCINATION_DETECTED' | 'INTEGRITY_GAP';
+  description: string;
+  severity: 'critical' | 'warning';
+  relatedEventIds: string[];
+}
+
+export interface AuditResult {
+  workflowRunId: string;
+  auditedAt: string;
+  result: 'PASS' | 'FAIL';
+  totalEvents: number;
+  totalCedarDecisions: number;
+  totalEvidenceRecords: number;
+  violations: AuditViolation[];
+  complianceScore: number;
+}
+
+export interface ComplianceReport {
+  workflowRunId: string;
+  status: 'COMPLIANT' | 'NON_COMPLIANT';
+  generatedAt: string;
+  auditResult: AuditResult;
+  recommendations: string[];
+}
+
+export interface SubmissionReceipt {
+  receiptId: string;
+  formId: string;
+  targetEndpoint: string;
+  submittedAt: string;
+  statusCode: number;
+  message: string;
+  fieldsSubmitted: number;
+}
+
+export interface FormPopulationResult {
+  formId: string;
+  fieldsPopulated: number;
+  allVerified: boolean;
+  fields: FormField[];
+}
+

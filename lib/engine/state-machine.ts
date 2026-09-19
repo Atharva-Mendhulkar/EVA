@@ -1,14 +1,15 @@
-// NEXUS Workflow Orchestrator & Server-Side State Machine
+// EVA Workflow Orchestrator & Server-Side State Machine
 // Coordinates: Intent -> Evidence -> Conflict -> Cedar -> Form -> Human Approval -> Submission -> Audit
 // PRINCIPLE: Server-side truth. Task tokens NEVER exposed to client. Real backend state transitions.
 
 import { cedarEngine } from '../cedar/engine';
 import { detectConflicts } from './comparator';
-import { getSeedEvidence } from './fixtures';
+import { getSeedEvidence, TEMPLATES } from './fixtures';
 import {
   AuditEvent,
   AwaitingAction,
   CanonicalField,
+  CedarResource,
   Conflict,
   DecisionExplanation,
   Evidence,
@@ -26,114 +27,220 @@ interface ServerTaskToken {
   expiresAt: number;
 }
 
-const INITIAL_PLAN: WorkflowStep[] = [
-  { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: 'Classified intent to internship_onboarding' },
-  { stepId: 2, name: 'Gather documents', status: 'COMPLETED', detail: '3 documents retrieved from Personal Vault' },
-  { stepId: 3, name: 'Extract evidence', status: 'COMPLETED', detail: '6 fields extracted via Bedrock Claude 3.5' },
-  { stepId: 4, name: 'Reconcile information', status: 'ATTENTION', detail: 'Contradiction detected: Mumbai ≠ Bangalore' },
-  { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar Policy Decision Point check' },
-  { stepId: 6, name: 'Populate form', status: 'PENDING', detail: 'Sandbox Mock HR form population' },
-  { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Server-persisted human consent gate' },
-  { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Consequential external dispatch' }
-];
+export function classifyIntent(intentText: string): string {
+  const text = (intentText || '').toLowerCase();
+  if (
+    text.includes('hardware') ||
+    text.includes('laptop') ||
+    text.includes('macbook') ||
+    text.includes('ram') ||
+    text.includes('procurement') ||
+    text.includes('workstation') ||
+    text.includes('spec')
+  ) {
+    return 'hardware_procurement';
+  }
+  if (
+    text.includes('medical') ||
+    text.includes('hospital') ||
+    text.includes('reimbursement') ||
+    text.includes('insurance') ||
+    text.includes('doctor') ||
+    text.includes('claim') ||
+    text.includes('health')
+  ) {
+    return 'medical_reimbursement';
+  }
+  if (
+    text.includes('payout') ||
+    text.includes('bank') ||
+    text.includes('cheque') ||
+    text.includes('ifsc') ||
+    text.includes('vendor') ||
+    text.includes('account') ||
+    text.includes('deposit') ||
+    text.includes('invoice')
+  ) {
+    return 'vendor_payout_update';
+  }
+  return 'internship_onboarding';
+}
 
 export class WorkflowStore {
   private workflows = new Map<string, WorkflowRun>();
   private serverTokens = new Map<string, ServerTaskToken>();
-  private activeRunIdBySession = 'default_active_run';
+  private activeRunIdBySession = 'run_demo_01';
 
   constructor() {
-    this.createOrResetDefault();
+    this.seedInitialWorkflows();
   }
 
-  public createOrResetDefault(intentText?: string, userIdentifier?: string): WorkflowRun {
-    const runId = 'run_demo_01';
-    const now = new Date();
+  public seedInitialWorkflows(): void {
+    const seeds = [
+      {
+        id: 'run_demo_01',
+        intent: "I'm starting an internship in Bangalore",
+        template: 'internship_onboarding',
+        userId: 'usr_eva_admin',
+        createdAtOffsetSec: 60
+      },
+      {
+        id: 'run_demo_02',
+        intent: 'Order a developer workstation for my engineering role',
+        template: 'hardware_procurement',
+        userId: 'usr_eva_admin',
+        createdAtOffsetSec: 3600
+      },
+      {
+        id: 'run_demo_03',
+        intent: 'File insurance reimbursement for my hospital bill',
+        template: 'medical_reimbursement',
+        userId: 'usr_eva_admin',
+        createdAtOffsetSec: 7200
+      },
+      {
+        id: 'run_demo_04',
+        intent: 'Update payout bank account for consulting invoices',
+        template: 'vendor_payout_update',
+        userId: 'usr_eva_admin',
+        createdAtOffsetSec: 10800
+      }
+    ];
+
+    for (const seed of seeds) {
+      this.createWorkflow(seed.intent, seed.template, seed.userId, seed.id, seed.createdAtOffsetSec);
+    }
+
+    this.activeRunIdBySession = 'run_demo_01';
+  }
+
+  public createWorkflow(
+    intentText?: string,
+    templateId?: string,
+    userIdentifier?: string,
+    customRunId?: string,
+    timeOffsetSec: number = 0
+  ): WorkflowRun {
     const activeIntent = intentText || "I'm starting an internship in Bangalore";
-    const activeUserId = userIdentifier || "usr_demo_atharva";
-    const evidenceList = getSeedEvidence(runId);
+    const selectedTemplateKey = templateId || classifyIntent(activeIntent);
+    const templateConfig = TEMPLATES[selectedTemplateKey] || TEMPLATES['internship_onboarding'];
+    const activeUserId = userIdentifier || 'usr_eva_admin';
+    const runId = customRunId || `run_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    const now = new Date(Date.now() - timeOffsetSec * 1000);
+    const evidenceList = getSeedEvidence(runId, templateConfig.templateId);
     const conflictResult = detectConflicts(runId, evidenceList);
 
-    // Register server-side task token for conflict resolution
-    const conflictToken = `sfn_token_conflict_${Date.now()}`;
-    this.serverTokens.set(runId, {
-      token: conflictToken,
-      step: 'CONFLICT_RESOLUTION',
-      workflowRunId: runId,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 86400000
-    });
+    // Register server-side task token for conflict resolution if conflicts exist
+    if (conflictResult.conflicts.length > 0) {
+      const conflictToken = `sfn_token_conflict_${Date.now()}_${runId}`;
+      this.serverTokens.set(runId, {
+        token: conflictToken,
+        step: 'CONFLICT_RESOLUTION',
+        workflowRunId: runId,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 86400000
+      });
+    }
+
+    const initialPlan: WorkflowStep[] = [
+      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Classified intent to ${templateConfig.templateId}` },
+      { stepId: 2, name: 'Gather documents', status: 'COMPLETED', detail: `${templateConfig.documentIds.length} documents retrieved from Personal Vault` },
+      { stepId: 3, name: 'Extract evidence', status: 'COMPLETED', detail: `${evidenceList.length} fields extracted via Bedrock Claude 3.5` },
+      {
+        stepId: 4,
+        name: 'Reconcile information',
+        status: conflictResult.conflicts.length > 0 ? 'ATTENTION' : 'COMPLETED',
+        detail: conflictResult.conflicts.length > 0
+          ? `Contradiction detected: ${conflictResult.conflicts[0].candidateEvidence[0]?.value || ''} ≠ ${conflictResult.conflicts[0].candidateEvidence[1]?.value || ''}`
+          : 'All evidence reconciled cleanly'
+      },
+      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar Policy Decision Point check' },
+      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Sandbox ${templateConfig.targetSystem} form population` },
+      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Server-persisted human consent gate' },
+      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Consequential external dispatch' }
+    ];
+
+    const firstConflict = conflictResult.conflicts[0];
 
     const initialAudit: AuditEvent[] = [
       {
-        eventId: `aud_${Date.now()}_01`,
+        eventId: `aud_${Date.now()}_01_${runId}`,
         workflowRunId: runId,
         timestamp: new Date(now.getTime() - 40000).toISOString(),
-        actor: 'NexusAgent::"orchestrator"',
+        actor: 'EvaAgent::"orchestrator"',
         action: 'parse_intent',
         decision: 'INFO',
-        reason: `Understood request: "${activeIntent}". Matched template: internship_onboarding.`,
+        reason: `Understood request: "${activeIntent}". Matched template: ${templateConfig.templateId}.`,
         explanation: {
-          decisionId: `exp_init_${Date.now()}`,
+          decisionId: `exp_init_${Date.now()}_${runId}`,
           action: 'parse_intent',
           outcome: 'SUCCESS',
-          summary: 'Matched intent to internship onboarding template based on semantic phrasing.',
+          summary: `Matched intent to ${templateConfig.title} template based on semantic phrasing.`,
           evidenceRefs: [],
           policyRefs: [],
           conditions: [
-            { name: 'template_match', required: 'internship_onboarding', actual: 'internship_onboarding', result: 'PASS' }
+            { name: 'template_match', required: templateConfig.templateId, actual: templateConfig.templateId, result: 'PASS' }
           ],
-          actor: 'NexusAgent::"orchestrator"',
+          actor: 'EvaAgent::"orchestrator"',
           timestamp: new Date(now.getTime() - 40000).toISOString(),
           nextAction: 'Retrieve personal documents from Personal Vault'
         }
       },
       {
-        eventId: `aud_${Date.now()}_02`,
+        eventId: `aud_${Date.now()}_02_${runId}`,
         workflowRunId: runId,
         timestamp: new Date(now.getTime() - 30000).toISOString(),
-        actor: 'NexusAgent::"document_evidence"',
+        actor: 'EvaAgent::"document_evidence"',
         action: 'vault_search',
         decision: 'INFO',
-        reason: 'Retrieved 3 documents: Personal_Profile.pdf, College_NOC.pdf, Internship_Offer_Letter.pdf.'
+        reason: `Retrieved ${templateConfig.documentIds.length} documents from Personal Vault for ${templateConfig.title}.`
       },
       {
-        eventId: `aud_${Date.now()}_03`,
+        eventId: `aud_${Date.now()}_03_${runId}`,
         workflowRunId: runId,
         timestamp: new Date(now.getTime() - 20000).toISOString(),
-        actor: 'NexusAgent::"document_evidence"',
+        actor: 'EvaAgent::"document_evidence"',
         action: 'extract_evidence',
         decision: 'INFO',
-        reason: 'Amazon Bedrock extracted 6 fields with strict grounding. Zero hallucinated values.',
+        reason: `Amazon Bedrock extracted ${evidenceList.length} fields with strict grounding. Zero hallucinated values.`,
         evidenceRefs: evidenceList.map((e) => e.evidenceId)
-      },
-      {
-        eventId: `aud_${Date.now()}_04`,
+      }
+    ];
+
+    if (firstConflict) {
+      initialAudit.push({
+        eventId: `aud_${Date.now()}_04_${runId}`,
         workflowRunId: runId,
         timestamp: new Date(now.getTime() - 10000).toISOString(),
         actor: 'system::deterministic_comparator',
         action: 'reconcile_evidence',
         decision: 'WARN',
-        reason: 'Contradiction detected: Work Location has incompatible values (Mumbai vs. Bangalore). Execution paused.',
-        evidenceRefs: conflictResult.conflicts[0]?.candidateEvidence.map((e) => e.evidenceId),
+        reason: `Contradiction detected: ${firstConflict.field} has incompatible values (${firstConflict.candidateEvidence.map((e) => e.value).join(' vs. ')}). Execution paused.`,
+        evidenceRefs: firstConflict.candidateEvidence.map((e) => e.evidenceId),
         explanation: {
-          decisionId: `exp_conf_${Date.now()}`,
+          decisionId: `exp_conf_${Date.now()}_${runId}`,
           action: 'reconcile_evidence',
           outcome: 'CONFLICT',
-          summary: 'Deterministic comparator detected incompatible values for work_location.',
-          whyStopped: 'Personal Profile (Mumbai) disagrees with Internship Offer Letter (Bangalore). NEXUS does not silently pick a winner.',
-          evidenceRefs: conflictResult.conflicts[0]?.candidateEvidence.map((e) => e.evidenceId) || [],
+          summary: `Deterministic comparator detected incompatible values for ${firstConflict.field}.`,
+          whyStopped: `${firstConflict.candidateEvidence[0]?.sourceDocumentName || 'Source A'} (${firstConflict.candidateEvidence[0]?.value}) disagrees with ${firstConflict.candidateEvidence[1]?.sourceDocumentName || 'Source B'} (${firstConflict.candidateEvidence[1]?.value}). EVA does not silently pick a winner.`,
+          evidenceRefs: firstConflict.candidateEvidence.map((e) => e.evidenceId),
           policyRefs: [],
           conditions: [
-            { name: 'normalized_match', required: 'identical', actual: 'mumbai ≠ bangalore', result: 'FAIL' }
+            {
+              name: 'normalized_match',
+              required: 'identical',
+              actual: `${firstConflict.comparatorAnalysis.normalizedA} ≠ ${firstConflict.comparatorAnalysis.normalizedB}`,
+              result: 'FAIL'
+            }
           ],
           actor: 'system::deterministic_comparator',
           timestamp: new Date(now.getTime() - 10000).toISOString(),
           nextAction: 'Pause workflow via Step Functions waitForTaskToken and surface Conflict Card to user',
           whatWouldChange: 'User must select authoritative source or enter an explicit override.'
         }
-      }
-    ];
+      });
+    }
 
     if (
       activeIntent.toLowerCase().includes('ignore') ||
@@ -141,7 +248,7 @@ export class WorkflowStore {
       activeIntent.toLowerCase().includes('system prompt')
     ) {
       initialAudit.push({
-        eventId: `aud_${Date.now()}_sec`,
+        eventId: `aud_${Date.now()}_sec_${runId}`,
         workflowRunId: runId,
         timestamp: now.toISOString(),
         actor: 'system::bedrock_guardrail',
@@ -151,14 +258,14 @@ export class WorkflowStore {
       });
     }
 
-    if (activeIntent.toLowerCase().includes('bank')) {
+    if (activeIntent.toLowerCase().includes('bank') && templateConfig.templateId === 'internship_onboarding') {
       initialAudit.push({
-        eventId: `aud_${Date.now()}_refusal`,
+        eventId: `aud_${Date.now()}_refusal_${runId}`,
         workflowRunId: runId,
         timestamp: now.toISOString(),
-        actor: 'NexusAgent::"document_evidence"',
+        actor: 'EvaAgent::"document_evidence"',
         action: 'field_grounding_refusal',
-        decision: 'REFUSE',
+        decision: 'BLOCKED',
         reason: 'Field bank_account_number absent from verified vault corpus. Value set to null (confidence 0.0). Hallucination strictly refused per PRD Section 18.3.'
       });
     }
@@ -167,18 +274,21 @@ export class WorkflowStore {
       workflowRunId: runId,
       userId: activeUserId,
       intent: activeIntent,
-      template: 'internship_onboarding',
-      status: 'AWAITING_USER_RESOLUTION',
-      currentStep: 'Resolve conflict',
+      template: templateConfig.templateId,
+      title: templateConfig.title,
+      category: templateConfig.category,
+      targetSystem: templateConfig.targetSystem,
+      status: conflictResult.conflicts.length > 0 ? 'AWAITING_USER_RESOLUTION' : 'PLANNING',
+      currentStep: conflictResult.conflicts.length > 0 ? 'Resolve conflict' : 'Reconciling',
       stepIndex: 4,
-      awaitingAction: 'CONFLICT_RESOLUTION', // NOTE: activeTaskToken is NEVER exposed to the client!
-      plan: INITIAL_PLAN.map((s) => ({ ...s })),
+      awaitingAction: conflictResult.conflicts.length > 0 ? 'CONFLICT_RESOLUTION' : null,
+      plan: initialPlan,
       evidence: evidenceList,
       conflicts: conflictResult.conflicts,
       auditTrail: initialAudit,
       cedarDecisions: [],
       formFields: [],
-      latestExplanation: initialAudit[3].explanation,
+      latestExplanation: initialAudit[initialAudit.length - 1]?.explanation,
       createdAt: new Date(now.getTime() - 45000).toISOString(),
       updatedAt: now.toISOString()
     };
@@ -188,6 +298,15 @@ export class WorkflowStore {
     return initialRun;
   }
 
+  public createOrResetDefault(intentText?: string, userIdentifier?: string): WorkflowRun {
+    return this.createWorkflow(
+      intentText || "I'm starting an internship in Bangalore",
+      'internship_onboarding',
+      userIdentifier || 'usr_eva_admin',
+      'run_demo_01'
+    );
+  }
+
   public getWorkflow(runId: string): WorkflowRun | null {
     return this.workflows.get(runId) || null;
   }
@@ -195,9 +314,22 @@ export class WorkflowStore {
   public getActiveWorkflow(): WorkflowRun {
     let run = this.workflows.get(this.activeRunIdBySession);
     if (!run) {
-      run = this.createOrResetDefault();
+      run = this.workflows.get('run_demo_01') || this.createOrResetDefault();
     }
     return run;
+  }
+
+  public setActiveWorkflow(runId: string): WorkflowRun {
+    const run = this.workflows.get(runId);
+    if (!run) throw new Error(`Workflow run ${runId} not found.`);
+    this.activeRunIdBySession = runId;
+    return run;
+  }
+
+  public listWorkflows(): WorkflowRun[] {
+    return Array.from(this.workflows.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   /**
@@ -242,13 +374,17 @@ export class WorkflowStore {
 
     let selectedEv = run.evidence.find((e) => e.evidenceId === selectedEvidenceId);
     if (!selectedEv && selectedEvidenceId) {
-      selectedEv = run.evidence.find((e) =>
-        e.evidenceId.includes(selectedEvidenceId) ||
-        selectedEvidenceId.includes(e.evidenceId) ||
-        (e.field === conflict?.field && (e.value.toLowerCase() === selectedEvidenceId.toLowerCase() || e.sourceDocumentId === selectedEvidenceId))
+      selectedEv = run.evidence.find(
+        (e) =>
+          e.evidenceId.includes(selectedEvidenceId) ||
+          selectedEvidenceId.includes(e.evidenceId) ||
+          (e.field === conflict?.field &&
+            (e.value.toLowerCase() === selectedEvidenceId.toLowerCase() ||
+              e.sourceDocumentId === selectedEvidenceId))
       );
     }
-    const resolvedValue = overrideValue || selectedEv?.value || 'Bangalore';
+    const resolvedValue =
+      overrideValue || selectedEv?.value || conflict.candidateEvidence[0]?.value || 'Confirmed Value';
 
     // Invalidate conflict task token (Simulating Step Functions SendTaskSuccess)
     this.serverTokens.delete(runId);
@@ -261,13 +397,13 @@ export class WorkflowStore {
       actor: `User::"${run.userId}"`,
       action: 'resolve_conflict',
       decision: 'RESOLVE',
-      reason: `User resolved work_location conflict: Selected ${resolvedValue} from ${selectedEv?.sourceDocumentName || 'user override'}.`,
+      reason: `User resolved ${conflict.field} conflict: Selected ${resolvedValue} from ${selectedEv?.sourceDocumentName || 'user override'}.`,
       evidenceRefs: [selectedEvidenceId],
       explanation: {
         decisionId: `exp_res_${Date.now()}`,
         action: 'resolve_conflict',
         outcome: 'SUCCESS',
-        summary: `User explicitly confirmed ${resolvedValue} as authoritative.`,
+        summary: `User explicitly confirmed ${resolvedValue} as authoritative for ${conflict.field}.`,
         evidenceRefs: [selectedEvidenceId],
         policyRefs: [],
         conditions: [
@@ -285,18 +421,22 @@ export class WorkflowStore {
     run.plan[4].status = 'IN_PROGRESS';
     run.status = 'AUTHORIZING_POPULATION';
 
+    const cedarResource = `Form::"${run.template}"` as CedarResource;
+
     const populateDecision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"populate_form"',
-      'Form::"internship_onboarding"',
+      cedarResource,
       {
         conflict_resolved: true,
         evidence_confidence: 0.98,
         human_approved: false,
-        workflow_scope: 'internship'
+        workflow_scope: run.template
       }
     );
     run.cedarDecisions.push(populateDecision);
+
+    const templateConfig = TEMPLATES[run.template] || TEMPLATES['internship_onboarding'];
 
     const authAudit: AuditEvent = {
       eventId: `aud_${Date.now()}_auth_pop`,
@@ -316,7 +456,7 @@ export class WorkflowStore {
         conditions: populateDecision.conditions,
         actor: 'cedar::engine',
         timestamp: new Date().toISOString(),
-        nextAction: 'Populate 6 fields in Mock HR Endpoint form sandbox'
+        nextAction: `Populate fields in ${templateConfig.targetSystem}`
       }
     };
     run.auditTrail.push(authAudit);
@@ -326,86 +466,46 @@ export class WorkflowStore {
     run.plan[5].status = 'COMPLETED';
     run.status = 'POPULATING_FORM';
 
-    run.formFields = [
-      {
-        fieldId: 'fld_name',
-        canonicalField: 'full_name',
-        label: 'Full Legal Name',
-        value: 'Atharva Mendhulkar',
-        sourceDocument: 'Personal_Profile.pdf',
-        sourceLocation: 'Page 1, Header',
-        confidence: 0.99,
-        evidenceId: `ev_prof_name_${runId}`,
-        status: 'verified'
-      },
-      {
-        fieldId: 'fld_uni',
-        canonicalField: 'university',
-        label: 'Current University',
-        value: 'Mumbai Institute of Technology',
-        sourceDocument: 'College_NOC.pdf',
-        sourceLocation: 'Page 1, Letterhead',
-        confidence: 0.98,
-        evidenceId: `ev_noc_university_${runId}`,
-        status: 'verified'
-      },
-      {
-        fieldId: 'fld_employer',
-        canonicalField: 'employer',
-        label: 'Employer / Company',
-        value: 'Acme Cloud Systems',
-        sourceDocument: 'Internship_Offer_Letter.pdf',
-        sourceLocation: 'Page 1, Header',
-        confidence: 0.99,
-        evidenceId: `ev_offer_employer_${runId}`,
-        status: 'verified'
-      },
-      {
-        fieldId: 'fld_role',
-        canonicalField: 'role',
-        label: 'Internship Role',
-        value: 'Software Engineering Intern',
-        sourceDocument: 'Internship_Offer_Letter.pdf',
-        sourceLocation: 'Page 1, Paragraph 1',
-        confidence: 0.98,
-        evidenceId: `ev_offer_role_${runId}`,
-        status: 'verified'
-      },
-      {
-        fieldId: 'fld_location',
-        canonicalField: 'work_location',
-        label: 'Work Location',
-        value: resolvedValue,
-        sourceDocument: selectedEv?.sourceDocumentName || 'Internship_Offer_Letter.pdf',
-        sourceLocation: selectedEv?.sourceLocation || 'Page 1, Paragraph 2',
-        confidence: 0.98,
-        evidenceId: selectedEvidenceId,
-        userConfirmed: true,
-        status: 'verified'
-      },
-      {
-        fieldId: 'fld_start',
-        canonicalField: 'start_date',
-        label: 'Start Date',
-        value: '2026-10-01',
-        sourceDocument: 'Internship_Offer_Letter.pdf',
-        sourceLocation: 'Page 1, Paragraph 2',
-        confidence: 0.95,
-        evidenceId: `ev_offer_start_${runId}`,
-        status: 'verified'
+    // Populate form fields dynamically matching template schema
+    run.formFields = templateConfig.fieldSchema.map((item, idx) => {
+      if (conflict && item.field === conflict.field) {
+        return {
+          fieldId: `fld_${item.field}_${idx}`,
+          canonicalField: item.field,
+          label: item.label,
+          value: resolvedValue,
+          sourceDocument: selectedEv?.sourceDocumentName || 'Authoritative Selection',
+          sourceLocation: selectedEv?.sourceLocation || 'User Resolution',
+          confidence: 0.99,
+          evidenceId: selectedEvidenceId,
+          userConfirmed: true,
+          status: 'verified' as const
+        };
       }
-    ];
+      const ev = run.evidence.find((e) => e.field === item.field);
+      return {
+        fieldId: `fld_${item.field}_${idx}`,
+        canonicalField: item.field,
+        label: item.label,
+        value: ev ? ev.value : 'N/A',
+        sourceDocument: ev ? ev.sourceDocumentName : 'Verified Vault Document',
+        sourceLocation: ev ? ev.sourceLocation : 'Section 1',
+        confidence: ev ? ev.confidence : 0.95,
+        evidenceId: ev ? ev.evidenceId : `ev_${item.field}_${runId}`,
+        status: 'verified' as const
+      };
+    });
 
     // Step 7: Cedar Evaluation for submit_form BEFORE human approval -> MUST PRODUCE REAL CEDAR DENY!
     const submitPreDecision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"submit_form"',
-      'Form::"internship_onboarding"',
+      cedarResource,
       {
         conflict_resolved: true,
         evidence_confidence: 0.98,
         human_approved: false, // NOT YET APPROVED
-        workflow_scope: 'internship'
+        workflow_scope: run.template
       }
     );
     run.cedarDecisions.push(submitPreDecision);
@@ -462,7 +562,7 @@ export class WorkflowStore {
    * 1. State must be AWAITING_HUMAN_APPROVAL
    * 2. Server task token exists
    * 3. Re-evaluates Cedar PDP with human_approved = true -> ALLOW
-   * 4. Dispatches sandbox submission to Mock HR Endpoint
+   * 4. Dispatches sandbox submission to Target System
    * 5. Completes workflow and writes final audit event
    */
   public approveSubmission(
@@ -506,7 +606,7 @@ export class WorkflowStore {
         decisionId: `exp_appr_${Date.now()}`,
         action: 'human_approval',
         outcome: 'SUCCESS',
-        summary: 'User approved all 6 verified fields and authorized external sandbox dispatch.',
+        summary: `User approved all ${run.formFields.length} verified fields and authorized external sandbox dispatch.`,
         evidenceRefs: run.formFields.map((f) => f.evidenceId),
         policyRefs: [],
         conditions: [
@@ -519,16 +619,19 @@ export class WorkflowStore {
     };
     run.auditTrail.push(approvalAudit);
 
+    const cedarResource = `Form::"${run.template}"` as CedarResource;
+    const templateConfig = TEMPLATES[run.template] || TEMPLATES['internship_onboarding'];
+
     // Re-evaluate Cedar with human_approved: true -> MUST PRODUCE REAL CEDAR ALLOW!
     const submitPostDecision = cedarEngine.evaluate(
-      'NexusAgent::"form_execution"',
+      'EvaAgent::"form_execution"',
       'Action::"submit_form"',
-      'Form::"internship_onboarding"',
+      cedarResource,
       {
         conflict_resolved: true,
         evidence_confidence: 0.98,
         human_approved: true, // APPROVED!
-        workflow_scope: 'internship'
+        workflow_scope: run.template
       }
     );
     run.cedarDecisions.push(submitPostDecision);
@@ -551,12 +654,12 @@ export class WorkflowStore {
         conditions: submitPostDecision.conditions,
         actor: 'cedar::engine',
         timestamp: new Date().toISOString(),
-        nextAction: 'Execute sandbox dispatch to Mock HR Endpoint'
+        nextAction: `Execute sandbox dispatch to ${templateConfig.targetSystem}`
       }
     };
     run.auditTrail.push(allowSubmitAudit);
 
-    // Final Execution: Mock HR Sandbox Submission
+    // Final Execution: Mock Sandbox Submission
     run.status = 'COMPLETED';
     run.awaitingAction = null;
     run.plan[6].status = 'COMPLETED';
@@ -568,10 +671,10 @@ export class WorkflowStore {
       eventId: `aud_${Date.now()}_sub_complete`,
       workflowRunId: runId,
       timestamp: new Date().toISOString(),
-      actor: 'NexusAgent::"form_execution"',
+      actor: 'EvaAgent::"form_execution"',
       action: 'sandbox_submission',
       decision: 'SUCCESS',
-      reason: 'Sandbox External Action: 6 verified fields submitted to Mock HR Endpoint (HTTP 200). Authorization boundary verified.',
+      reason: `Sandbox External Action: ${run.formFields.length} verified fields submitted to ${templateConfig.targetSystem} (HTTP 200). Authorization boundary verified.`,
       explanation: {
         decisionId: `exp_comp_${Date.now()}`,
         action: 'sandbox_submission',
@@ -580,12 +683,12 @@ export class WorkflowStore {
         evidenceRefs: run.formFields.map((f) => f.evidenceId),
         policyRefs: [submitPostDecision.policyId],
         conditions: [
-          { name: 'evidence_verified', required: '6/6', actual: '6/6', result: 'PASS' },
+          { name: 'evidence_verified', required: `${run.formFields.length}/${run.formFields.length}`, actual: `${run.formFields.length}/${run.formFields.length}`, result: 'PASS' },
           { name: 'conflict_resolved', required: '0 open', actual: '0 open', result: 'PASS' },
           { name: 'cedar_authorized', required: 'ALLOW', actual: 'ALLOW', result: 'PASS' },
           { name: 'human_approved', required: 'true', actual: 'true', result: 'PASS' }
         ],
-        actor: 'NexusAgent::"form_execution"',
+        actor: 'EvaAgent::"form_execution"',
         timestamp: new Date().toISOString(),
         nextAction: 'Append-Only Audit Trail ready for inspection'
       }
@@ -606,15 +709,15 @@ export class WorkflowStore {
       decisionId: `exp_refusal_${Date.now()}`,
       action: `populate_field_${field}`,
       outcome: 'REFUSAL',
-      summary: `NEXUS refused to populate ${field}: No verified evidence exists in the vault.`,
-      whyStopped: 'NEXUS zero-hallucination guardrail strictly forbids fabricating sensitive values.',
+      summary: `EVA refused to populate ${field}: No verified evidence exists in the vault.`,
+      whyStopped: 'EVA zero-hallucination guardrail strictly forbids fabricating sensitive values.',
       evidenceRefs: [],
       policyRefs: [],
       conditions: [
         { name: 'evidence_found', required: '>= 1 source', actual: '0 sources', result: 'FAIL' },
         { name: 'confidence_score', required: '>= 0.60', actual: '0.00', result: 'FAIL' }
       ],
-      actor: 'NexusAgent::"form_execution"',
+      actor: 'EvaAgent::"form_execution"',
       timestamp: new Date().toISOString(),
       nextAction: 'Halt population for this field and prompt user for manual input'
     };

@@ -1,1 +1,7 @@
-export { POST } from '@/app/api/workflows/[id]/reset/route';
+import { NextResponse } from 'next/server';
+import { workflowStore } from '@/lib/engine/state-machine';
+
+export async function POST() {
+  const freshWorkflow = workflowStore.createOrResetDefault();
+  return NextResponse.json(freshWorkflow);
+}

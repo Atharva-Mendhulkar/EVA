@@ -5,7 +5,7 @@ import { getSeedEvidence, SEEDED_PROMPT_INJECTION_DOC } from '../lib/engine/fixt
 import { WorkflowStore } from '../lib/engine/state-machine';
 import { Evidence } from '../lib/engine/types';
 
-describe('NEXUS Core Logic & Verification Suite', () => {
+describe('EVA Core Logic & Verification Suite', () => {
   let store: WorkflowStore;
 
   beforeEach(() => {
@@ -178,7 +178,7 @@ describe('NEXUS Core Logic & Verification Suite', () => {
   it('8. Missing sensitive field produces strict refusal without hallucination', () => {
     const refusal = store.refuseMissingField('bank_account_number');
     expect(refusal.outcome).toBe('REFUSAL');
-    expect(refusal.summary).toContain('NEXUS refused to populate bank_account_number');
+    expect(refusal.summary).toContain('EVA refused to populate bank_account_number');
     expect(refusal.whyStopped).toContain('zero-hallucination guardrail');
   });
 
@@ -280,5 +280,56 @@ describe('NEXUS Core Logic & Verification Suite', () => {
     expect(actions).toContain('human_approval');
     expect(actions).toContain('re-evaluate_policy (submit_form)');
     expect(actions).toContain('sandbox_submission');
+  });
+
+  // 14. Multi-case workflow creation & listing
+  it('14. Multi-case operations are pre-seeded and listed with proper metadata', () => {
+    const allWorkflows = store.listWorkflows();
+    expect(allWorkflows.length).toBe(4);
+
+    const templates = allWorkflows.map((w) => w.template);
+    expect(templates).toContain('internship_onboarding');
+    expect(templates).toContain('hardware_procurement');
+    expect(templates).toContain('medical_reimbursement');
+    expect(templates).toContain('vendor_payout_update');
+
+    // Switching active workflow
+    const hwWf = allWorkflows.find((w) => w.template === 'hardware_procurement')!;
+    store.setActiveWorkflow(hwWf.workflowRunId);
+    expect(store.getActiveWorkflow().template).toBe('hardware_procurement');
+  });
+
+  // 15. Hardware procurement conflict and resolution
+  it('15. Hardware procurement detects RAM conflict and executes full lifecycle', () => {
+    const hwWf = store.getWorkflow('run_demo_02')!;
+    expect(hwWf.conflicts.length).toBe(1);
+    expect(hwWf.conflicts[0].field).toBe('ram_spec');
+
+    const managerApproval = hwWf.conflicts[0].candidateEvidence.find((e) => e.value.includes('36GB'))!;
+    expect(managerApproval).toBeDefined();
+
+    // Resolve RAM conflict
+    const postResolve = store.resolveConflict(hwWf.workflowRunId, hwWf.conflicts[0].conflictId, managerApproval.evidenceId);
+    expect(postResolve.status).toBe('AWAITING_HUMAN_APPROVAL');
+    expect(postResolve.formFields.length).toBe(6);
+
+    const ramField = postResolve.formFields.find((f) => f.canonicalField === 'ram_spec');
+    expect(ramField?.value).toBe(managerApproval.value);
+
+    // Approve submission
+    const postApprove = store.approveSubmission(hwWf.workflowRunId, 'APPROVE');
+    expect(postApprove.status).toBe('COMPLETED');
+    expect(postApprove.cedarDecisions.length).toBe(3);
+  });
+
+  // 16. Medical reimbursement and vendor payout conflict verification
+  it('16. Medical reimbursement and vendor payout detect respective critical conflicts', () => {
+    const medWf = store.getWorkflow('run_demo_03')!;
+    expect(medWf.conflicts.length).toBe(1);
+    expect(medWf.conflicts[0].field).toBe('admission_date');
+
+    const payoutWf = store.getWorkflow('run_demo_04')!;
+    expect(payoutWf.conflicts.length).toBe(1);
+    expect(payoutWf.conflicts[0].field).toBe('ifsc_code');
   });
 });

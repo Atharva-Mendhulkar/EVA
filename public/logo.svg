@@ -1,0 +1,130 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  width="512"
+  height="512"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">EVA Logo</title>
+  <desc id="desc">
+    Minimal centered EVA chrome wordmark on a black rounded-square background.
+  </desc>
+
+  <defs>
+    <!-- Metallic chrome -->
+    <linearGradient
+      id="chrome"
+      x1="0"
+      y1="0"
+      x2="1"
+      y2="1"
+    >
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="20%" stop-color="#aeb4ba"/>
+      <stop offset="42%" stop-color="#f7f7f7"/>
+      <stop offset="58%" stop-color="#686e74"/>
+      <stop offset="78%" stop-color="#e9eaec"/>
+      <stop offset="100%" stop-color="#8b9197"/>
+    </linearGradient>
+
+    <!-- Subtle depth -->
+    <filter
+      id="shadow"
+      x="-20%"
+      y="-20%"
+      width="140%"
+      height="140%"
+    >
+      <feDropShadow
+        dx="0"
+        dy="7"
+        stdDeviation="7"
+        flood-color="#000000"
+        flood-opacity="0.65"
+      />
+    </filter>
+  </defs>
+
+  <!-- Black rounded-square canvas -->
+  <rect
+    x="16"
+    y="16"
+    width="480"
+    height="480"
+    rx="88"
+    fill="#050505"
+  />
+
+  <!--
+    EVA wordmark
+    Overall bounds:
+      x = 106 → 406
+      y = 181 → 331
+
+    Center:
+      x = 256
+      y = 256
+  -->
+
+  <g
+    fill="url(#chrome)"
+    filter="url(#shadow)"
+    transform="translate(0 0)"
+  >
+
+    <!-- E -->
+    <path
+      d="
+        M106 181
+        H190
+        L202 202
+        H130
+        V237
+        H185
+        L197 258
+        H130
+        V293
+        H202
+        L190 331
+        H106
+        Z
+      "
+    />
+
+    <!-- V -->
+    <path
+      d="
+        M190 181
+        H218
+        L256 285
+        L294 181
+        H322
+        L270 331
+        H242
+        Z
+      "
+    />
+
+    <!-- A -->
+    <path
+      d="
+        M306 331
+        L353 181
+        H381
+        L406 331
+        H378
+        L371 297
+        H338
+        L328 331
+        Z
+
+        M344 274
+        H366
+        L356 224
+        Z
+      "
+    />
+
+  </g>
+</svg>

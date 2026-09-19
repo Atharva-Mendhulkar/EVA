@@ -2,20 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  FileCheck,
-  FileText,
-  History,
-  Lock,
-  ShieldAlert,
-  ShieldCheck,
-  Terminal,
-  UserCheck
-} from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { AuditEvent } from '@/lib/engine/types';
 
 interface AuditTimelineViewProps {
@@ -82,10 +69,29 @@ export function AuditTimelineView({
                   animate={{ opacity: 1, height: 'auto' }}
                   className="trace-box-minimal mt-2"
                 >
-                  <div className="text-[11px] font-mono text-zinc-400 flex flex-col gap-1">
+                  <div className="text-[11px] font-mono text-zinc-400 flex flex-col gap-1.5">
                     <div>Actor: {evt.actor}</div>
                     <div>Resource: {evt.resource || 'Form::"internship_onboarding"'}</div>
                     <div>SHA-256: <span className="text-zinc-500">{evt.cryptographicHash || `sha256:${evt.eventId.replace(/[^a-zA-Z0-9]/g, '').padEnd(64, '0').slice(0, 64)}`}</span></div>
+                    {evt.evidenceRefs && evt.evidenceRefs.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        <span className="text-zinc-500">Evidence Citations:</span>
+                        {evt.evidenceRefs.map((refId) => (
+                          <button
+                            key={refId}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onInspectEvidence?.(refId);
+                            }}
+                            className="badge-minimal text-[10px] hover:border-zinc-500 cursor-pointer"
+                            title="Inspect evidence excerpt"
+                          >
+                            {refId}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

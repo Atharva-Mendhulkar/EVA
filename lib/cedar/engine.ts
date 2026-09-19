@@ -1,4 +1,4 @@
-// NEXUS Cedar Authorization Policy Engine
+// EVA Cedar Authorization Policy Engine
 // Real declarative Policy Decision Point (PDP) with Cedar 3.x/4.x semantic compliance
 // PRINCIPLE: Fail-closed (default DENY), inspectable, causal explainability
 
@@ -14,9 +14,14 @@ import {
 export const CEDAR_POLICIES = {
   POPULATE_FORM_PERMIT: `// Policy ID: policy_01_populate_permit
 permit (
-  principal == NexusAgent::"form_execution",
+  principal in [EvaAgent::"form_execution", NexusAgent::"form_execution"],
   action == Action::"populate_form",
-  resource == Form::"internship_onboarding"
+  resource in [
+    Form::"internship_onboarding",
+    Form::"hardware_procurement",
+    Form::"medical_reimbursement",
+    Form::"vendor_payout_update"
+  ]
 )
 when {
   context.conflict_resolved == true &&
@@ -27,21 +32,10 @@ when {
 forbid (
   principal,
   action == Action::"submit_form",
-  resource == Form::"internship_onboarding"
+  resource
 )
 unless {
   context.human_approved == true
-};`,
-
-  SENSITIVE_DOC_FORBID: `// Policy ID: policy_03_sensitive_scoping
-forbid (
-  principal,
-  action == Action::"read_document",
-  resource
-)
-when {
-  resource.sensitivity == "financial" &&
-  context.workflow_scope != "financial"
 };`
 };
 
@@ -107,10 +101,6 @@ export class CedarEngine {
         return this.evaluateSubmitForm(decisionId, principal, resource, context, evaluatedAt);
       }
 
-      if (action === 'Action::"read_document"') {
-        return this.evaluateReadDocument(decisionId, principal, resource, context, evaluatedAt);
-      }
-
       // Default deny for unmapped action
       return {
         decisionId,
@@ -160,17 +150,24 @@ export class CedarEngine {
     context: CedarContext,
     evaluatedAt: string
   ): CedarEvaluationResult {
-    const isPrincipalMatched = principal === 'NexusAgent::"form_execution"';
-    const isResourceMatched = resource === 'Form::"internship_onboarding"';
+    const isPrincipalMatched =
+      principal === 'EvaAgent::"form_execution"' || principal === 'NexusAgent::"form_execution"';
+    const isResourceMatched = typeof resource === 'string' && resource.startsWith('Form::');
     const isConflictResolved = context.conflict_resolved === true;
     const isConfidenceSufficient = context.evidence_confidence >= 0.60;
 
     const conditions: PolicyConditionResult[] = [
       {
         name: 'principal_is_form_execution',
-        required: 'NexusAgent::"form_execution"',
+        required: 'EvaAgent::"form_execution"',
         actual: principal,
         result: isPrincipalMatched ? 'PASS' : 'FAIL'
+      },
+      {
+        name: 'resource_is_form',
+        required: 'Form::*',
+        actual: resource,
+        result: isResourceMatched ? 'PASS' : 'FAIL'
       },
       {
         name: 'conflict_resolved',
@@ -215,6 +212,8 @@ export class CedarEngine {
         failureReason += ` Evidence confidence (${context.evidence_confidence}) is below the required 0.60 threshold.`;
       } else if (!isPrincipalMatched) {
         failureReason += ` Principal ${principal} is not permitted to populate forms.`;
+      } else if (!isResourceMatched) {
+        failureReason += ` Resource ${resource} is not a valid Form.`;
       }
 
       return {
@@ -298,66 +297,6 @@ export class CedarEngine {
         condition: 'human_approved',
         from: 'true',
         to: 'false',
-        outcomeWouldBecome: 'DENY'
-      },
-      evaluatedAt
-    };
-  }
-
-  private evaluateReadDocument(
-    decisionId: string,
-    principal: CedarPrincipal,
-    resource: CedarResource,
-    context: CedarContext,
-    evaluatedAt: string
-  ): CedarEvaluationResult {
-    const isFinancial = resource.includes('financial');
-    const isFinancialScope = context.workflow_scope === 'financial';
-
-    const conditions: PolicyConditionResult[] = [
-      {
-        name: 'sensitivity_scoping',
-        required: isFinancial ? 'workflow_scope == financial' : 'standard',
-        actual: `scope: ${context.workflow_scope}`,
-        result: !isFinancial || isFinancialScope ? 'PASS' : 'FAIL'
-      }
-    ];
-
-    if (isFinancial && !isFinancialScope) {
-      return {
-        decisionId,
-        principal,
-        action: 'Action::"read_document"',
-        resource,
-        decision: 'DENY',
-        reason: 'Access Denied: Financial documents are restricted from non-financial workflow scopes.',
-        policySnippet: CEDAR_POLICIES.SENSITIVE_DOC_FORBID,
-        policyId: 'policy_03_sensitive_scoping',
-        conditions,
-        whatWouldChange: {
-          condition: 'workflow_scope',
-          from: context.workflow_scope,
-          to: 'financial',
-          outcomeWouldBecome: 'ALLOW'
-        },
-        evaluatedAt
-      };
-    }
-
-    return {
-      decisionId,
-      principal,
-      action: 'Action::"read_document"',
-      resource,
-      decision: 'ALLOW',
-      reason: 'Document read authorized within active workflow scope.',
-      policySnippet: CEDAR_POLICIES.SENSITIVE_DOC_FORBID,
-      policyId: 'policy_03_sensitive_scoping',
-      conditions,
-      whatWouldChange: {
-        condition: 'resource.sensitivity',
-        from: 'standard',
-        to: 'financial',
         outcomeWouldBecome: 'DENY'
       },
       evaluatedAt

@@ -1,1 +1,18 @@
-export { POST } from '@/app/api/workflows/[id]/approve/route';
+import { NextRequest, NextResponse } from 'next/server';
+import { workflowStore } from '@/lib/engine/state-machine';
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const { decision = 'APPROVE', notes } = body;
+
+    const updatedWorkflow = workflowStore.approveSubmission(id, decision, notes);
+    return NextResponse.json(updatedWorkflow);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+}

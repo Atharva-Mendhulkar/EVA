@@ -3,23 +3,16 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  AlertTriangle,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Globe,
-  Search,
-  Sparkles,
-  CheckCircle2,
-  AlertTriangle,
-  ShieldCheck,
-  ShieldAlert,
-  Clock,
-  Loader2,
   FileText,
-  Layers,
-  ArrowRight,
-  Send,
-  Lock,
-  UserCheck
+  Globe,
+  Loader2,
+  Search,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 import { WorkflowStatus, WorkflowStep } from '@/lib/engine/types';
 
@@ -53,7 +46,7 @@ export function AgentProgress({
   plan,
   stepIndex
 }: AgentProgressProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'phases' | 'trace'>('phases');
 
   const isCompleted = status === 'COMPLETED';
@@ -80,7 +73,7 @@ export function AgentProgress({
   return (
     <div className="agent-thinking-wrapper mb-6">
       {/* Expandable Capsule Header (Matches Image 2 & PRD Section 16) */}
-      <div className="thinking-toggle-bar flex items-center justify-between p-3.5 border-b border-zinc-800/80">
+      <div className={`thinking-toggle-bar flex items-center justify-between p-3.5 ${isOpen ? 'border-b border-zinc-800/80' : ''}`}>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}

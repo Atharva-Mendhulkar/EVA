@@ -3,25 +3,11 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'NEXUS — Personal Operations Agent',
-  description: 'Your documents. Your decisions. Executed when you’re ready.',
-  generator: 'v0.app',
+  title: 'EVA — Evidence-Aware Administrative Agent',
+  description: 'Evidence-aware administrative orchestrator with deterministic verification, Cedar authorization, and human approval.',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/logo.svg',
+    apple: '/logo.svg',
   },
 }
 

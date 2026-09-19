@@ -11,12 +11,30 @@ interface EvidenceDrawerProps {
 }
 
 export function EvidenceDrawer({ evidence, onClose }: EvidenceDrawerProps) {
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (evidence) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [evidence, onClose]);
+
   if (!evidence) return null;
 
   return (
-    <div className="drawer-overlay" role="dialog" aria-modal="true">
+    <div
+      className="drawer-overlay"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <motion.div
         className="drawer-panel-minimal"
+        onClick={(e) => e.stopPropagation()}
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}

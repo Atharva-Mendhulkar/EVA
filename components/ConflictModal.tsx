@@ -1,16 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  AlertTriangle,
   ArrowRight,
-  Check,
   FileText,
   Loader2,
   X
 } from 'lucide-react';
-import { Conflict, Evidence } from '@/lib/engine/types';
+import { Conflict } from '@/lib/engine/types';
 
 interface ConflictModalProps {
   conflict: Conflict;
@@ -37,10 +35,41 @@ export function ConflictModal({ conflict, onResolve, onClose }: ConflictModalPro
     }
   };
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const formatFieldLabel = (field: string) => {
+    switch (field) {
+      case 'work_location':
+        return 'Work Location';
+      case 'ram_spec':
+        return 'RAM Specification';
+      case 'admission_date':
+        return 'Hospital Admission Date';
+      case 'ifsc_code':
+        return 'Bank Branch IFSC Code';
+      default:
+        return field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+  };
+
   return (
-    <div className="conflict-modal-overlay" role="dialog" aria-modal="true">
+    <div
+      className="conflict-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <motion.div
         className="conflict-modal-card"
+        onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.2 }}
@@ -58,92 +87,89 @@ export function ConflictModal({ conflict, onResolve, onClose }: ConflictModalPro
         </div>
 
         <h2 className="text-lg font-medium text-zinc-100">
-          Work Location has conflicting evidence
+          {formatFieldLabel(conflict.field)} has conflicting evidence
         </h2>
         <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-          NEXUS never silently breaks ties between conflicting documents. Review the extracted evidence and choose the authoritative value.
+          EVA never silently breaks ties between conflicting documents. Review the extracted evidence and choose the authoritative value.
         </p>
 
         {/* 2 Options Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-          {/* Source A: Profile */}
+          {/* Source A */}
           <div className="conflict-option-card">
             <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-              <span className="flex items-center gap-1.5">
-                <FileText className="w-3 h-3 text-zinc-400" />
-                Personal Profile
+              <span className="flex items-center gap-1.5 truncate max-w-[200px]">
+                <FileText className="w-3 h-3 text-zinc-400 shrink-0" />
+                <span className="truncate">{candidateA?.sourceDocumentName || 'Source A'}</span>
               </span>
-              <span>Conf {Math.round(candidateA.confidence * 100)}%</span>
+              <span>Conf {Math.round((candidateA?.confidence || 0.95) * 100)}%</span>
             </div>
 
             <div className="my-2">
               <span className="text-[10px] text-zinc-500 font-mono uppercase">Value</span>
               <strong className="text-xl font-medium text-zinc-100 block font-mono">
-                {candidateA.value}
+                {candidateA?.value}
               </strong>
             </div>
 
             <p className="conflict-excerpt">
-              &ldquo;{candidateA.sourceExcerpt}&rdquo;
+              &ldquo;{candidateA?.sourceExcerpt}&rdquo;
             </p>
 
             <span className="text-[11px] text-zinc-500 font-mono mt-2 block">
-              Updated: Jan 2025 · {candidateA.sourceLocation}
+              {candidateA?.documentUpdatedAt ? new Date(candidateA.documentUpdatedAt).toLocaleDateString() : 'Verified'} · {candidateA?.sourceLocation}
             </span>
 
             <button
-              onClick={() => handleSelect(candidateA.evidenceId)}
-              disabled={isSubmitting}
+              onClick={() => candidateA && handleSelect(candidateA.evidenceId)}
+              disabled={isSubmitting || !candidateA}
               className="conflict-select-btn mt-3"
               type="button"
             >
-              {isSubmitting && selectedId === candidateA.evidenceId ? (
+              {isSubmitting && selectedId === candidateA?.evidenceId ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                'Use Mumbai'
+                `Use ${candidateA?.value}`
               )}
             </button>
           </div>
 
-          {/* Source B: Offer Letter */}
+          {/* Source B */}
           <div className="conflict-option-card option-card-preferred">
             <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-              <span className="flex items-center gap-1.5 text-zinc-200">
-                <FileText className="w-3 h-3 text-zinc-300" />
-                Offer Letter (Acme)
+              <span className="flex items-center gap-1.5 text-zinc-200 truncate max-w-[200px]">
+                <FileText className="w-3 h-3 text-zinc-300 shrink-0" />
+                <span className="truncate">{candidateB?.sourceDocumentName || 'Source B'}</span>
               </span>
-              <span className="text-zinc-300">Conf {Math.round(candidateB.confidence * 100)}%</span>
+              <span className="text-zinc-300">Conf {Math.round((candidateB?.confidence || 0.98) * 100)}%</span>
             </div>
 
             <div className="my-2">
               <span className="text-[10px] text-zinc-500 font-mono uppercase">Value</span>
               <strong className="text-xl font-medium text-zinc-100 block font-mono">
-                {candidateB.value}
+                {candidateB?.value}
               </strong>
             </div>
 
             <p className="conflict-excerpt">
-              &ldquo;{candidateB.sourceExcerpt}&rdquo;
+              &ldquo;{candidateB?.sourceExcerpt}&rdquo;
             </p>
 
             <span className="text-[11px] text-zinc-400 font-mono mt-2 block">
-              Issued: Mar 2026 · {candidateB.sourceLocation}
-            </span>
-            <span className="text-[10px] text-zinc-500 italic mt-0.5 block">
-              Note: This document is newer than the profile.
+              {candidateB?.documentUpdatedAt ? new Date(candidateB.documentUpdatedAt).toLocaleDateString() : 'Verified'} · {candidateB?.sourceLocation}
             </span>
 
             <button
-              onClick={() => handleSelect(candidateB.evidenceId)}
-              disabled={isSubmitting}
+              onClick={() => candidateB && handleSelect(candidateB.evidenceId)}
+              disabled={isSubmitting || !candidateB}
               className="conflict-select-btn btn-white mt-3"
               type="button"
             >
-              {isSubmitting && selectedId === candidateB.evidenceId ? (
+              {isSubmitting && selectedId === candidateB?.evidenceId ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <>
-                  <span>Use Bangalore</span>
+                  <span>Use {candidateB?.value}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}

@@ -6,19 +6,15 @@ import {
   ArrowRight,
   Check,
   Code2,
-  Lock,
-  ShieldCheck,
-  ShieldAlert,
   X
 } from 'lucide-react';
 import { CedarEvaluationResult } from '@/lib/engine/types';
 
 interface CedarInspectorProps {
   decision: CedarEvaluationResult;
-  onContinue?: () => void;
 }
 
-export function CedarInspector({ decision, onContinue }: CedarInspectorProps) {
+export function CedarInspector({ decision }: CedarInspectorProps) {
   const [showCode, setShowCode] = useState(false);
   const isAllow = decision.decision === 'ALLOW';
 

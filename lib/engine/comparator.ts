@@ -1,4 +1,4 @@
-// NEXUS Deterministic Comparator & Normalization Engine
+// EVA Deterministic Comparator & Normalization Engine
 // PRINCIPLE: Zero LLM reliance for conflict detection. 100% deterministic code.
 
 import { CanonicalField, Conflict, Evidence } from './types';
@@ -21,6 +21,22 @@ export function normalizeFieldValue(field: CanonicalField, rawValue: string): st
 
   if (field === 'work_location') {
     return CITY_SYNONYMS[cleaned] || cleaned;
+  }
+
+  if (field === 'ram_spec') {
+    return cleaned
+      .replace(/unified memory/g, '')
+      .replace(/ram/g, '')
+      .replace(/\s+/g, '')
+      .trim();
+  }
+
+  if (field === 'budget_amount' || field === 'claim_amount') {
+    return cleaned.replace(/[₹$,\s]/g, '');
+  }
+
+  if (field === 'ifsc_code') {
+    return cleaned.toUpperCase().replace(/\s+/g, '');
   }
 
   return cleaned;
@@ -47,6 +63,20 @@ export function detectConflicts(
   const conflicts: Conflict[] = [];
   let hasCriticalConflict = false;
 
+  const CRITICAL_FIELDS: CanonicalField[] = [
+    'work_location',
+    'full_name',
+    'employer',
+    'start_date',
+    'ram_spec',
+    'device_model',
+    'budget_amount',
+    'admission_date',
+    'claim_amount',
+    'ifsc_code',
+    'account_number'
+  ];
+
   for (const [field, records] of grouped.entries()) {
     if (records.length < 2) continue;
 
@@ -58,7 +88,7 @@ export function detectConflicts(
       .find((r) => normalizeFieldValue(field, r.value) !== normalizedA);
 
     if (mismatchedRecord) {
-      const isCritical = ['work_location', 'full_name', 'employer', 'start_date'].includes(field);
+      const isCritical = CRITICAL_FIELDS.includes(field);
       const normalizedB = normalizeFieldValue(field, mismatchedRecord.value);
 
       const conflict: Conflict = {
@@ -77,7 +107,7 @@ export function detectConflicts(
           normalizedB,
           comparison: 'DIFFERENT',
           result: 'EXECUTION BLOCKED',
-          reason: 'These documents contain incompatible values for the same canonical field. NEXUS will not choose one automatically.'
+          reason: 'These documents contain incompatible values for the same canonical field. EVA will not choose one automatically.'
         }
       };
 

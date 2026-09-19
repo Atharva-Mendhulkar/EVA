@@ -2,18 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Info,
-  Lock,
-  ShieldAlert,
-  ShieldCheck,
-  XCircle
-} from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { DecisionExplanation } from '@/lib/engine/types';
 
 interface DecisionExplanationCardProps {

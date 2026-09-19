@@ -2,28 +2,23 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  ArrowRight,
-  Check,
-  FileCheck,
-  Loader2,
-  Lock,
-  Send,
-  ShieldAlert
-} from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 interface ApprovalGateProps {
   onApprove: () => Promise<void>;
-  onReview?: () => void;
   isSubmitting?: boolean;
 }
 
-export function ApprovalGate({ onApprove, onReview, isSubmitting }: ApprovalGateProps) {
+export function ApprovalGate({ onApprove, isSubmitting }: ApprovalGateProps) {
   const [confirmed, setConfirmed] = useState(false);
 
   const handleApprove = async () => {
-    setConfirmed(true);
-    await onApprove();
+    try {
+      setConfirmed(true);
+      await onApprove();
+    } finally {
+      setConfirmed(false);
+    }
   };
 
   const loading = isSubmitting || confirmed;

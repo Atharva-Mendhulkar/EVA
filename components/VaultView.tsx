@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { FileText, Lock, ShieldCheck, Upload, Loader2, Info } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 import { DEMO_VAULT_DOCUMENTS } from '@/lib/engine/fixtures';
 import { DocumentMetadata } from '@/lib/engine/types';
 
@@ -83,9 +83,9 @@ export function VaultView() {
       </div>
 
       {selectedDoc && (
-        <div className="mt-4 p-3 rounded-xl border border-zinc-800 bg-zinc-900/60 text-xs font-mono text-zinc-400 flex flex-col gap-1.5 animate-in fade-in duration-200">
+        <div className="mt-4 p-3 rounded-xl border border-zinc-800 bg-zinc-900/60 text-xs font-mono text-zinc-400 flex flex-col gap-1.5 transition-opacity duration-200">
           <div className="flex items-center justify-between text-zinc-300 font-medium">
-            <span>S3 Metadata: s3://nexus-user-vault-atharva/{selectedDoc.name}</span>
+            <span>S3 Metadata: s3://eva-user-vault/{selectedDoc.name}</span>
             <span className="badge-minimal text-[10px]">ENCRYPTED</span>
           </div>
           <div>MIME Type: {selectedDoc.type} · Size: {selectedDoc.sizeBytes} bytes</div>
