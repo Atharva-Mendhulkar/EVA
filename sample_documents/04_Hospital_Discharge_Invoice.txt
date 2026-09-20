@@ -1,0 +1,25 @@
+APOLLO HOSPITALS ENTERPRISE LIMITED
+21 Greams Lane, Off Greams Road, Thousand Lights, Chennai, Tamil Nadu 600006
+
+IN-PATIENT ADMISSION & EMERGENCY DISCHARGE BILLING SUMMARY
+
+Invoice Number: APL-CHE-2026-98104
+Invoice Date: September 08, 2026
+Patient Name: Atharva Mendhulkar
+Hospital Name: Apollo Hospitals Greams Road Chennai
+Insurance Policy ID: POL-MED-2026-9812
+Admission Date: August 20, 2026
+Discharge Date: August 24, 2026
+Attending Physician: Dr. K. Ramanathan, MD, FRCP
+
+CLINICAL EXPENSE BREAKDOWN:
+- Room & Nursing Charges (ICU & Private Deluxe): $650.00
+- Diagnostic Imaging & Laboratory Pathology: $420.00
+- Pharmacy & Acute Medical Supplies: $380.00
+- Professional Consultation & Specialist Fees: $400.00
+
+TOTAL CLAIM AMOUNT: $1,850.00
+Payment Status: In-Patient Claim Submitted to Third-Party Corporate Administrator
+
+Certified by Billing Accounts Dept,
+Apollo Hospitals Greams Road, Chennai

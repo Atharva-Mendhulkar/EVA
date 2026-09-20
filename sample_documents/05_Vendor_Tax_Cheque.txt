@@ -1,0 +1,21 @@
+HDFC BANK LIMITED
+ITC Centre, Anna Salai Branch, Chennai, Tamil Nadu 600002
+
+VERIFIED VENDOR PAYOUT & CANCELLED CHEQUE RECORD
+
+Cheque Leaf Number: 489201
+Date: July 22, 2026
+Vendor Name: CloudScale Solutions Private Limited
+Bank Name: HDFC Bank Limited
+Account Number: 50100492819201
+Account Type: Current Business Account
+IFSC Code: HDFC0001234
+MICR Code: 600240012
+Authorized Currency: USD
+Claim Amount: $8,500.00
+
+BANK VERIFICATION ENDORSEMENT:
+We hereby certify that the bank coordinates listed above belong to CloudScale Solutions Private Limited and are validated for automated ACH and wire disbursements.
+
+Branch Operations Officer,
+HDFC Bank Anna Salai Branch

@@ -1,0 +1,18 @@
+ACME CLOUD SYSTEMS - IT & INFRASTRUCTURE ASSET MANAGEMENT
+ENGINEERING HARDWARE REQUISITION FORM
+
+Requisition Reference: REQ-HW-2026-8819
+Employee Name: Atharva Mendhulkar
+Role: Software Engineering Intern
+Department Code: ENG-PROD-2026
+Device Model: 16-inch MacBook Pro M3 Max
+RAM Spec: 64GB unified memory
+Storage: 1TB SSD
+Authorized Budget Amount: $3,499.00
+Cost Center: CC-ENG-AI-2026
+
+Equipment Specification & Business Justification:
+The requested workstation is required for compiling local foundation models, containerized agentic sandboxes, and high-throughput vector pipeline benchmarking. Conforms to Enterprise Hardware Allocation Tier 1.
+
+Approval Status: Approved by Engineering Director
+Signature: Verified Digital ID

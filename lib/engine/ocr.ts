@@ -142,7 +142,7 @@ export function extractEntitiesFromText(
   }
 
   // 2. Full Name
-  const nameMatch = text.match(/(?:full\s+(?:legal\s+)?name|employee\s+name|candidate\s+name|recipient):\s*([A-Za-z\s]+?)(?:[.,\n<]|$)/i);
+  const nameMatch = text.match(/(?:full\s+(?:legal\s+)?name|employee\s+name|candidate\s+name|patient\s+name|student\s+name|recipient):\s*([A-Za-z\s]+?)(?:[.,\n<]|$)/i);
   if (nameMatch) {
     evidenceList.push({
       evidenceId: `ev_ocr_name_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -178,13 +178,15 @@ export function extractEntitiesFromText(
   }
 
   // 4. Monetary Amount / Claim
-  const amountMatch = text.match(/(?:₹|\$|USD|INR)\s*([\d,]+(?:\.\d{2})?)/i);
+  const totalAmountMatch = text.match(/(?:total\s+(?:claim\s+)?amount|claim\s+amount|authorized\s+budget\s+amount|total):\s*(?:₹|\$|USD|INR)?\s*([\d,]+(?:\.\d{2})?)/i);
+  const amountMatch = totalAmountMatch || text.match(/(?:₹|\$|USD|INR)\s*([\d,]+(?:\.\d{2})?)/i);
   if (amountMatch) {
+    const rawVal = totalAmountMatch ? totalAmountMatch[1].trim() : amountMatch[0].trim();
     evidenceList.push({
       evidenceId: `ev_ocr_amt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       workflowRunId,
       field: 'claim_amount',
-      value: amountMatch[0].trim(),
+      value: rawVal.startsWith('$') || rawVal.startsWith('₹') ? rawVal : `$${rawVal}`,
       sourceDocumentId: docId,
       sourceDocumentName: docName,
       sourceLocation: 'OCR Financial Summary',
@@ -210,6 +212,169 @@ export function extractEntitiesFromText(
       extractedAt: now,
       documentUpdatedAt: now,
       confidence: 0.99
+    });
+  }
+
+  // 6. University / College
+  const uniMatch = text.match(/(?:university|college|institution|institute):\s*([A-Za-z\s&.,]+?)(?:[.,\n]|$)/i);
+  if (uniMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_uni_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'university',
+      value: uniMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Educational Affiliation',
+      sourceExcerpt: uniMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.98
+    });
+  }
+
+  // 7. Employer / Company / Vendor Name
+  const employerMatch = text.match(/(?:employer|company(?:\s+name)?|vendor(?:\s+name)?|organization|corporation):\s*([A-Za-z0-9\s&.,]+?)(?:[.,\n]|$)/i);
+  if (employerMatch) {
+    const isVendor = /vendor/i.test(employerMatch[0]);
+    evidenceList.push({
+      evidenceId: `ev_ocr_emp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: isVendor ? 'vendor_name' : 'employer',
+      value: employerMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Corporate Header',
+      sourceExcerpt: employerMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.97
+    });
+  }
+
+  // 8. Role / Position / Designation
+  const roleMatch = text.match(/(?:role|designation|position|title):\s*([A-Za-z0-9\s&.,/-]+?)(?:[.,\n]|$)/i);
+  if (roleMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_role_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'role',
+      value: roleMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Appointment Block',
+      sourceExcerpt: roleMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.98
+    });
+  }
+
+  // 9. Start Date / Commencement Date
+  const dateMatch = text.match(/(?:start\s+date|commencement\s+date|joining\s+date|admission\s+date|effective\s+date):\s*([A-Za-z0-9\s,/-]+?)(?:\n|$)/i);
+  if (dateMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_date_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'start_date',
+      value: dateMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Schedule Section',
+      sourceExcerpt: dateMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.98
+    });
+  }
+
+  // 10. Device Model / Workstation
+  const deviceMatch = text.match(/(?:device\s+model|workstation|hardware\s+model|laptop):\s*([A-Za-z0-9\s.,()-]+?)(?:[.,\n]|$)/i);
+  if (deviceMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_dev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'device_model',
+      value: deviceMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Hardware Specification',
+      sourceExcerpt: deviceMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.98
+    });
+  }
+
+  // 11. Hospital Name
+  const hospitalMatch = text.match(/(?:hospital(?:\s+name)?|clinic|healthcare\s+center):\s*([A-Za-z0-9\s&.,]+?)(?:[.,\n]|$)/i);
+  if (hospitalMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_hosp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'hospital_name',
+      value: hospitalMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Medical Facility Header',
+      sourceExcerpt: hospitalMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.99
+    });
+  }
+
+  // 12. Insurance Policy ID
+  const policyMatch = text.match(/(?:policy\s+(?:id|number)|insurance\s+(?:id|number)):\s*([A-Z0-9-]+)/i);
+  if (policyMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_pol_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'insurance_policy_id',
+      value: policyMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Insurance Policy Header',
+      sourceExcerpt: policyMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.99
+    });
+  }
+
+  // 13. Bank Account Number
+  const accountMatch = text.match(/(?:account\s+(?:number|no\.?)|a\/c\s+no\.?):\s*([0-9]{9,18})/i);
+  if (accountMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_acc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'account_number',
+      value: accountMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Banking Details',
+      sourceExcerpt: accountMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.99
+    });
+  }
+
+  // 14. Bank Name
+  const bankMatch = text.match(/(?:bank(?:\s+name)?):\s*([A-Za-z0-9\s&.,]+?)(?:[.,\n]|$)/i);
+  if (bankMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_bank_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'bank_name',
+      value: bankMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Banking Institution',
+      sourceExcerpt: bankMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.98
     });
   }
 

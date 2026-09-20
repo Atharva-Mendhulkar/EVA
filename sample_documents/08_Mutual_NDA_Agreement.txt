@@ -1,0 +1,18 @@
+MUTUAL NON-DISCLOSURE & INTELLECTUAL PROPERTY GOVERNANCE AGREEMENT
+
+Agreement Reference: NDA-LEGAL-2026-0042
+Effective Date: September 01, 2026
+Disclosing Party: Acme Cloud Systems Private Limited
+Receiving Party: Atharva Mendhulkar
+Role: Software Engineering Intern & Research Contributor
+Governing Jurisdiction: Legal & Regulatory Compliance Division
+
+SUMMARY OF COVENANTS:
+1. Confidential Information: All proprietary algorithms, zero-trust Cedar policy specifications, model weights, and architectural source code disclosed shall remain the exclusive property of Acme Cloud Systems.
+2. Term: The non-disclosure obligation shall remain in effect for a period of three (3) years from the effective date.
+3. Zero-Trust Adherence: Both parties covenant that all consequential actions taken by autonomous artificial intelligence agents shall require explicit cryptographic human sign-off before external mutation.
+
+IN WITNESS WHEREOF, the authorized parties have executed this agreement as of the date first written above.
+
+For Acme Cloud Systems: Chief Legal Officer
+For Contributor: Atharva Mendhulkar
