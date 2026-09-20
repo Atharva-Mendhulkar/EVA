@@ -17,7 +17,7 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import { FormField } from '@/lib/engine/types';
+import { FormAccessibilityNode, FormField } from '@/lib/engine/types';
 
 interface MockFormExecutionProps {
   fields: FormField[];
@@ -26,6 +26,7 @@ interface MockFormExecutionProps {
   isHumanApproved?: boolean;
   targetSystem?: string;
   title?: string;
+  accessibilityTree?: FormAccessibilityNode[];
 }
 
 export function MockFormExecution({
@@ -34,11 +35,12 @@ export function MockFormExecution({
   isSubmitting,
   isHumanApproved,
   targetSystem = 'Acme Cloud Systems · HR Onboarding Endpoint',
-  title = 'Enterprise Operations Execution Form'
+  title = 'Enterprise Operations Execution Form',
+  accessibilityTree
 }: MockFormExecutionProps) {
   const [filledIndices, setFilledIndices] = useState<number[]>([]);
   // Default to live browser preview for immediate visual impact
-  const [activeTab, setActiveTab] = useState<'browserPreview' | 'fields'>('browserPreview');
+  const [activeTab, setActiveTab] = useState<'browserPreview' | 'fields' | 'axTree'>('browserPreview');
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
 
@@ -73,6 +75,12 @@ export function MockFormExecution({
   const isGoogleForm =
     targetSystem.toLowerCase().includes('google') ||
     title.toLowerCase().includes('google');
+  const isMsForm =
+    targetSystem.toLowerCase().includes('office') ||
+    targetSystem.toLowerCase().includes('microsoft') ||
+    targetSystem.toLowerCase().includes('outlook') ||
+    title.toLowerCase().includes('microsoft') ||
+    title.toLowerCase().includes('outlook');
 
   const handleValueChange = (fieldId: string, val: string) => {
     setEditedValues((prev) => ({ ...prev, [fieldId]: val }));
@@ -116,6 +124,18 @@ export function MockFormExecution({
             >
               <Eye className="w-3.5 h-3.5" />
               <span>Live Browser Sandbox</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('axTree')}
+              className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+                activeTab === 'axTree'
+                  ? 'bg-white text-black font-semibold shadow-sm'
+                  : 'text-white/60 hover:text-white'
+              }`}
+              type="button"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>AX Tree &amp; Trace</span>
             </button>
             <button
               onClick={() => setActiveTab('fields')}
@@ -318,6 +338,123 @@ export function MockFormExecution({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'axTree' ? (
+        /* AWS Agentic Form Filling Accessibility Tree & Execution Trace View */
+        <div className="mt-4 space-y-4">
+          {/* Header Description */}
+          <div className="p-3.5 rounded-xl border border-white/10 bg-[#0f0f13] flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[10px]">
+                  AWS AI-POWERED BROWSER AUTOMATION AGENT
+                </span>
+                <span className="text-[11px] font-mono text-zinc-400">
+                  Episodic Memory &amp; AX Tree Mapping
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300 mt-1 font-mono">
+                Autonomous agent extracts the browser accessibility tree, maps interactive DOM nodes to semantic evidence, and stages Playwright actions.
+              </p>
+            </div>
+            <span className="text-xs font-mono text-white/80 bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">
+              {fields.length} Interactive Nodes
+            </span>
+          </div>
+
+          {/* AX Tree Nodes Table */}
+          <div className="rounded-xl border border-white/15 bg-[#0b0b0e] overflow-hidden">
+            <div className="px-4 py-2.5 bg-[#141418] border-b border-white/10 flex items-center justify-between text-xs font-mono text-zinc-300">
+              <span className="flex items-center gap-2">
+                <Terminal className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Extracted Accessibility Tree (AX Tree)</span>
+              </span>
+              <span className="text-[10px] text-zinc-500">
+                ARIA Roles &amp; Selectors Grounded
+              </span>
+            </div>
+            <div className="p-3 space-y-2 font-mono text-xs overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10 text-[10px] text-zinc-400 uppercase tracking-wider">
+                    <th className="pb-2 font-semibold">Accessible Name</th>
+                    <th className="pb-2 font-semibold">Role</th>
+                    <th className="pb-2 font-semibold">DOM Locator</th>
+                    <th className="pb-2 font-semibold">Grounded Value</th>
+                    <th className="pb-2 font-semibold text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-[11px]">
+                  {fields.map((f) => {
+                    const axNode = accessibilityTree?.find((n) => n.name === f.label || n.entryName === f.entryName);
+                    const role = axNode?.role || (f.type === 'textarea' ? 'textbox' : 'textbox');
+                    const locator = axNode?.selector || (f.entryName ? `input[name="${f.entryName}"]` : `#${f.fieldId}`);
+
+                    return (
+                      <tr key={f.fieldId} className="hover:bg-white/[0.02] transition">
+                        <td className="py-2 pr-3 text-white font-medium">{f.label}</td>
+                        <td className="py-2 pr-3">
+                          <span className="px-1.5 py-0.5 rounded bg-white/5 text-zinc-300 border border-white/10 text-[10px]">
+                            {role}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-emerald-400/90 truncate max-w-[200px]">
+                          <code>{locator}</code>
+                        </td>
+                        <td className="py-2 pr-3 text-zinc-300 truncate max-w-[180px]">
+                          {f.value}
+                        </td>
+                        <td className="py-2 text-right">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                            <Check className="w-2.5 h-2.5" />
+                            <span>MAPPED</span>
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Autonomous Playwright Execution Trace */}
+          <div className="rounded-xl border border-white/15 bg-[#0b0b0e] p-4 font-mono text-xs text-zinc-300 space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <span className="text-white font-medium flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Playwright Autonomous Action Log</span>
+              </span>
+              <span className="text-[10px] text-zinc-500">Live Agent Sandbox Execution</span>
+            </div>
+            <div className="space-y-1.5 text-[11px] text-zinc-400 max-h-48 overflow-y-auto pr-1">
+              <div className="text-zinc-500">
+                [00:00.012] <span className="text-white">browser.newPage()</span> &rarr; Headless context initialized with TLS 1.3
+              </div>
+              <div className="text-zinc-500">
+                [00:00.045] <span className="text-white">page.goto(&quot;{targetSystem.includes('http') ? targetSystem : isGoogleForm ? 'https://docs.google.com/forms/...' : 'https://forms.office.com/...'}&quot;)</span> &rarr; HTTP 200 OK
+              </div>
+              <div className="text-zinc-500">
+                [00:00.110] <span className="text-white">page.accessibility.snapshot()</span> &rarr; Extracted {fields.length} accessible nodes
+              </div>
+              <div className="text-zinc-500">
+                [00:00.145] <span className="text-white">agent.semantic_element_discovery()</span> &rarr; Strict grounding against verified Personal Vault
+              </div>
+              {fields.map((f, i) => (
+                <div key={`log_${f.fieldId}`} className="text-emerald-400/90">
+                  [00:0{i + 1}.{(i + 1) * 35}] page.fill(&apos;{f.entryName ? `input[name="${f.entryName}"]` : `#${f.fieldId}`}&apos;, &apos;{f.value.length > 25 ? f.value.slice(0, 25) + '...' : f.value}&apos;) &rarr; Verified (confidence {Math.round(f.confidence * 100)}%)
+                </div>
+              ))}
+              <div className="text-amber-400">
+                [00:08.920] cedar.evaluate(&quot;Action::submit_form&quot;) &rarr; GATED (Awaiting human approval challenge)
+              </div>
+              {isHumanApproved && (
+                <div className="text-emerald-300 font-semibold">
+                  [00:09.100] page.click(&apos;button[type=&quot;submit&quot;]&apos;) &rarr; Consequential submission executed. Receipt signed into audit chain.
+                </div>
+              )}
             </div>
           </div>
         </div>

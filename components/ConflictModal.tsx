@@ -96,94 +96,98 @@ export function ConflictModal({ conflict, onResolve, onClose }: ConflictModalPro
         {/* 2 Options Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           {/* Source A */}
-          <div className="conflict-option-card">
-            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
-              <span className="flex items-center gap-1.5 truncate max-w-[200px]">
+          <div className="conflict-option-card min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono gap-1">
+              <span className="flex items-center gap-1.5 truncate max-w-[170px]">
                 <FileText className="w-3 h-3 text-zinc-400 shrink-0" />
-                <span className="truncate">{candidateA?.sourceDocumentName || 'Source A'}</span>
+                <span className="truncate" title={candidateA?.sourceDocumentName}>{candidateA?.sourceDocumentName || 'Source A'}</span>
               </span>
-              <span>Conf {Math.round((candidateA?.confidence || 0.95) * 100)}%</span>
+              <span className="shrink-0">Conf {Math.round((candidateA?.confidence || 0.95) * 100)}%</span>
             </div>
 
-            <div className="my-2">
+            <div className="my-2 min-w-0">
               <span className="text-[10px] text-zinc-500 font-mono uppercase">Value</span>
-              <strong className="text-xl font-medium text-zinc-100 block font-mono">
+              <strong className="text-base sm:text-lg font-medium text-zinc-100 block font-mono break-words break-all leading-snug line-clamp-2" title={candidateA?.value}>
                 {candidateA?.value}
               </strong>
             </div>
 
-            <p className="conflict-excerpt">
+            <p className="conflict-excerpt break-words break-all line-clamp-3 text-xs leading-relaxed" title={candidateA?.sourceExcerpt}>
               &ldquo;{candidateA?.sourceExcerpt}&rdquo;
             </p>
 
-            <span className="text-[11px] text-zinc-500 font-mono mt-2 block">
+            <span className="text-[11px] text-zinc-500 font-mono mt-2 block truncate">
               {candidateA?.documentUpdatedAt ? new Date(candidateA.documentUpdatedAt).toLocaleDateString() : 'Verified'} · {candidateA?.sourceLocation}
             </span>
 
             <button
               onClick={() => candidateA && handleSelect(candidateA.evidenceId)}
               disabled={isSubmitting || !candidateA}
-              className="conflict-select-btn mt-3"
+              className="conflict-select-btn mt-3 max-w-full truncate px-2.5"
               type="button"
+              title={`Use ${candidateA?.value}`}
             >
               {isSubmitting && selectedId === candidateA?.evidenceId ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
               ) : (
-                `Use ${candidateA?.value}`
+                <span className="truncate">
+                  Use {candidateA?.value && candidateA.value.length > 22 ? `${candidateA.value.slice(0, 20)}...` : candidateA?.value}
+                </span>
               )}
             </button>
           </div>
 
           {/* Source B */}
-          <div className="conflict-option-card option-card-preferred">
-            <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-              <span className="flex items-center gap-1.5 text-zinc-200 truncate max-w-[200px]">
+          <div className="conflict-option-card option-card-preferred min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono gap-1">
+              <span className="flex items-center gap-1.5 text-zinc-200 truncate max-w-[170px]">
                 <FileText className="w-3 h-3 text-zinc-300 shrink-0" />
-                <span className="truncate">{candidateB?.sourceDocumentName || 'Source B'}</span>
+                <span className="truncate" title={candidateB?.sourceDocumentName}>{candidateB?.sourceDocumentName || 'Source B'}</span>
               </span>
-              <span className="text-zinc-300">Conf {Math.round((candidateB?.confidence || 0.98) * 100)}%</span>
+              <span className="text-zinc-300 shrink-0">Conf {Math.round((candidateB?.confidence || 0.98) * 100)}%</span>
             </div>
 
-            <div className="my-2">
+            <div className="my-2 min-w-0">
               <span className="text-[10px] text-zinc-500 font-mono uppercase">Value</span>
-              <strong className="text-xl font-medium text-zinc-100 block font-mono">
+              <strong className="text-base sm:text-lg font-medium text-zinc-100 block font-mono break-words break-all leading-snug line-clamp-2" title={candidateB?.value}>
                 {candidateB?.value}
               </strong>
             </div>
 
-            <p className="conflict-excerpt">
+            <p className="conflict-excerpt break-words break-all line-clamp-3 text-xs leading-relaxed" title={candidateB?.sourceExcerpt}>
               &ldquo;{candidateB?.sourceExcerpt}&rdquo;
             </p>
 
-            <span className="text-[11px] text-zinc-400 font-mono mt-2 block">
+            <span className="text-[11px] text-zinc-400 font-mono mt-2 block truncate">
               {candidateB?.documentUpdatedAt ? new Date(candidateB.documentUpdatedAt).toLocaleDateString() : 'Verified'} · {candidateB?.sourceLocation}
             </span>
 
             <button
               onClick={() => candidateB && handleSelect(candidateB.evidenceId)}
               disabled={isSubmitting || !candidateB}
-              className="conflict-select-btn btn-white mt-3"
+              className="conflict-select-btn mt-3 max-w-full truncate px-2.5"
               type="button"
+              title={`Use ${candidateB?.value}`}
             >
               {isSubmitting && selectedId === candidateB?.evidenceId ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
               ) : (
-                <>
-                  <span>Use {candidateB?.value}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
+                <span className="truncate flex items-center gap-1">
+                  <span>Use {candidateB?.value && candidateB.value.length > 22 ? `${candidateB.value.slice(0, 20)}...` : candidateB?.value}</span>
+                  <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                </span>
               )}
             </button>
           </div>
         </div>
 
         {/* Comparator breakdown */}
-        <div className="comparator-box-minimal mt-4">
+        <div className="comparator-box-minimal mt-4 min-w-0 overflow-hidden">
           <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 mb-1">
             <span>DETERMINISTIC COMPARATOR TRACE</span>
             <span className="text-zinc-300">STATUS: HALTED</span>
           </div>
-          <div className="text-[11px] font-mono text-zinc-400">
+          <div className="text-[11px] font-mono text-zinc-400 break-words break-all leading-relaxed">
             Field: {formatFieldLabel(conflict.field)} · Source A (&apos;{candidateA?.value || 'null'}&apos;) ≠ Source B (&apos;{candidateB?.value || 'null'}&apos;)
           </div>
         </div>

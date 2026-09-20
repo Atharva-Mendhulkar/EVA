@@ -378,7 +378,64 @@ export function extractEntitiesFromText(
     });
   }
 
+  // 15. Email Address
+  const emailMatch = text.match(/(?:email(?:\s+address)?|e-mail|contact\s+email):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i) ||
+    text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if (emailMatch) {
+    const rawEmail = emailMatch[1] || emailMatch[0];
+    evidenceList.push({
+      evidenceId: `ev_ocr_email_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'email_address',
+      value: rawEmail.trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Contact Block',
+      sourceExcerpt: emailMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.99
+    });
+  }
+
+  // 16. Phone / Contact Number
+  const phoneMatch = text.match(/(?:phone(?:\s+number)?|mobile(?:\s+number)?|contact\s+number):\s*([+0-9\s-]{10,16})/i);
+  if (phoneMatch) {
+    evidenceList.push({
+      evidenceId: `ev_ocr_phone_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workflowRunId,
+      field: 'phone_number',
+      value: phoneMatch[1].trim(),
+      sourceDocumentId: docId,
+      sourceDocumentName: docName,
+      sourceLocation: 'OCR Contact Block',
+      sourceExcerpt: phoneMatch[0].trim(),
+      extractedAt: now,
+      documentUpdatedAt: now,
+      confidence: 0.98
+    });
+  }
+
   return evidenceList;
+}
+
+// In-memory store for grounded uploaded documents & their OCR-extracted canonical evidence
+const UPLOADED_DOC_REGISTRY = new Map<string, { documentId: string; filename: string; text: string; evidence: Evidence[] }>();
+
+export function registerUploadedDocEvidence(docId: string, filename: string, text: string, evidence: Evidence[]): void {
+  UPLOADED_DOC_REGISTRY.set(docId, { documentId: docId, filename, text, evidence });
+}
+
+export function getUploadedDocEvidence(docId: string): { documentId: string; filename: string; text: string; evidence: Evidence[] } | undefined {
+  return UPLOADED_DOC_REGISTRY.get(docId);
+}
+
+export function getAllUploadedEvidence(): Evidence[] {
+  const all: Evidence[] = [];
+  for (const record of UPLOADED_DOC_REGISTRY.values()) {
+    all.push(...record.evidence);
+  }
+  return all;
 }
 
 /**
@@ -404,6 +461,9 @@ export async function processDocumentUpload(
     filename,
     workflowRunId
   );
+
+  // Register in memory store for downstream workflow binding
+  registerUploadedDocEvidence(anonymousDocId, filename, extractedText, extractedEvidence);
 
   return {
     anonymousDocId,

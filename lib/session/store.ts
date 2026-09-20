@@ -10,13 +10,7 @@ import { sha256Hex } from '../audit/chain';
 
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 86400);
 
-export interface SessionStore {
-  createSession(): { record: SessionRecord; sessionSecret: string };
-  validateSession(sessionId: string, sessionSecret: string): SessionRecord | null;
-  revokeSession(sessionId: string): boolean;
-}
-
-export class InMemorySessionStore implements SessionStore {
+export class InMemorySessionStore {
   private sessions = new Map<string, SessionRecord>();
 
   public createSession(): { record: SessionRecord; sessionSecret: string } {

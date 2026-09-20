@@ -71,8 +71,11 @@ export function detectConflicts(
     'account_number'
   ];
 
+  const EXCLUDED_FIELDS = new Set(['identity_doc', 'document_file', 'source_file', 'attachment']);
+
   for (const [field, records] of grouped.entries()) {
     if (records.length < 2) continue;
+    if (EXCLUDED_FIELDS.has(field) || field.startsWith('attachment_')) continue;
 
     // Compare normalized values
     const firstRecord = records[0];

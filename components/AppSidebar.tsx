@@ -122,27 +122,27 @@ export function AppSidebar({
               <span>New Operation</span>
             </div>
             <kbd className="text-[10px] font-mono text-black/60 bg-black/10 px-1.5 py-0.5 rounded">
-              ⌘N
+              Ctrl+N
             </kbd>
           </button>
         </div>
 
-        {/* Scrollable Center Section: ONLY Past Operations for this particular session */}
+        {/* Scrollable Center Section: Chats */}
         <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
           <div>
             <div className="flex items-center justify-between px-1 mb-2">
               <span className="text-[11px] font-mono uppercase tracking-wider text-white/40">
-                Past Operations
+                Chats
               </span>
               <span className="text-[10px] text-white/40 font-mono">
-                {workflows.length} in session
+                {workflows.length} chats
               </span>
             </div>
 
             <div className="space-y-1">
               {workflows.length === 0 ? (
                 <div className="px-2 py-8 text-center text-xs text-white/40 font-mono leading-relaxed">
-                  No operations in this session yet.
+                  No chats yet. Press Ctrl+N to start.
                 </div>
               ) : (
                 workflows.map((wf) => {

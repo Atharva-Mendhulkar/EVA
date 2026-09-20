@@ -136,7 +136,7 @@ export class EvaCoreStack extends cdk.Stack {
 
     // Step Functions Standard workflow (PRD Section 14)
     const definition = fs
-      .readFileSync(path.join(__dirname, '..', '..', 'step-functions-workflow.json'), 'utf8')
+      .readFileSync(path.join(__dirname, '..', 'step-functions-workflow.json'), 'utf8')
       .replace(/123456789012/g, cdk.Aws.ACCOUNT_ID)
       .replace(/us-east-1/g, cdk.Aws.REGION);
 

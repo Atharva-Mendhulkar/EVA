@@ -812,12 +812,15 @@ button, textarea, input {
 }
 
 .conflict-modal-card {
-  width: min(600px, 100%);
+  width: min(640px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 24px;
   position: relative;
+  box-sizing: border-box;
 }
 
 .conflict-close-btn {
@@ -837,6 +840,12 @@ button, textarea, input {
   padding: 14px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .option-card-preferred {
@@ -852,6 +861,8 @@ button, textarea, input {
   border-radius: 6px;
   margin: 6px 0;
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .conflict-select-btn {

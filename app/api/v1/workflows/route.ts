@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { workflowStore } from '@/lib/engine/state-machine';
 import { requireSession } from '@/lib/session/store';
-import { extractUrls, isGoogleFormUrl } from '@/lib/engine/form-parser';
+import { extractUrls, isGoogleFormUrl, isWebFormUrl } from '@/lib/engine/form-parser';
 
 export async function GET(req: NextRequest) {
   if (!requireSession(req)) {
@@ -30,14 +30,14 @@ export async function POST(req: NextRequest) {
       (enableFormFill ? 'google_forms_fill' : (enableSearch ? 'web_search_research' : undefined));
     let workflow = workflowStore.createWorkflow(intent, resolvedTemplate, userId, undefined, 0, attachedDocumentIds);
 
-    // If a Google Form URL is present, dynamically ingest live public schema
+    // If a Google Form or Web Form URL is present, dynamically ingest live schema
     const urls = extractUrls(intent || '');
-    const gFormUrl = urls.find((u) => isGoogleFormUrl(u));
-    if (gFormUrl) {
+    const formUrl = urls.find((u) => isWebFormUrl(u) || isGoogleFormUrl(u));
+    if (formUrl) {
       try {
-        workflow = await workflowStore.ingestGoogleForm(workflow.workflowRunId, gFormUrl);
+        workflow = await workflowStore.ingestGoogleForm(workflow.workflowRunId, formUrl);
       } catch (err) {
-        console.warn('Google Form dynamic fetch note:', err);
+        console.warn('Web Form dynamic fetch note:', err);
       }
     }
 

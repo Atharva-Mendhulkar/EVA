@@ -173,24 +173,39 @@ export class EvaOrchestrator {
 
 // ─── 2. Domain Agents ────────────────────────────────────────────────────────
 
-export class EmploymentDomainAgent implements IDomainAgent {
-  public readonly domain = 'employment' as const;
-  public readonly name = 'employment';
-  public readonly principal: CedarPrincipal = 'EvaAgent::"employment"';
-  public readonly systemPrompt = `You are the EVA Employment Domain Agent. You handle internship and employment onboarding, offer-letter interpretation, and required credential checklists. You work from metadata and schemas, never raw documents.`;
+interface DomainPlanConfig {
+  understand: string;
+  gather: string;
+  extract: string;
+  reconcile: string;
+  authorize: string;
+  populate: string;
+  approval: string;
+  submit: string;
+}
 
-  /** Canonical requirements plus the refusal canary (PRD Section 5.2). */
+export abstract class BaseDomainAgent implements IDomainAgent {
+  constructor(
+    public readonly domain: DomainType,
+    public readonly name: string,
+    public readonly principal: CedarPrincipal,
+    public readonly systemPrompt: string,
+    public readonly refusalCanary: CanonicalField,
+    public readonly defaultTemplate: string,
+    private readonly planDetails: DomainPlanConfig
+  ) {}
+
   public async get_required_fields(template: string): Promise<CanonicalField[]> {
-    const config = TEMPLATES[template];
+    const config = TEMPLATES[template] || TEMPLATES[this.defaultTemplate];
     if (!config) throw new Error(`Unknown template "${template}".`);
-    return [...config.fieldSchema.map((f) => f.field), 'bank_account_number'];
+    return [...config.fieldSchema.map((f) => f.field), this.refusalCanary];
   }
 
   public async validate_document_checklist(
     template: string,
     availableDocumentIds: string[]
   ): Promise<{ met: string[]; missing: string[] }> {
-    const config = TEMPLATES[template];
+    const config = TEMPLATES[template] || TEMPLATES[this.defaultTemplate];
     if (!config) throw new Error(`Unknown template "${template}".`);
     const available = new Set(availableDocumentIds);
     return {
@@ -200,231 +215,161 @@ export class EmploymentDomainAgent implements IDomainAgent {
   }
 
   public async compile_domain_plan(template: string, intent: string): Promise<WorkflowStep[]> {
-    const config = TEMPLATES[template] || TEMPLATES['internship_onboarding'];
+    const config = TEMPLATES[template] || TEMPLATES[this.defaultTemplate] || TEMPLATES['internship_onboarding'];
+    const count = String(config.documentIds?.length ?? 0);
+    const target = config.targetSystem || 'target system';
     return [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Intent → ${config.title}` },
-      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: `${config.documentIds.length} required documents` },
-      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: 'Evidence Agent structured extraction' },
-      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: 'Deterministic comparator' },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar PDP evaluation' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Form Filling Agent plan for ${config.targetSystem}` },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Action-bound human approval gate' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: `Consequential dispatch to ${config.targetSystem}` }
+      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: this.planDetails.understand.replace('{title}', config.title) },
+      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: this.planDetails.gather.replace('{count}', count) },
+      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: this.planDetails.extract },
+      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: this.planDetails.reconcile },
+      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: this.planDetails.authorize },
+      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: this.planDetails.populate.replace('{target}', target) },
+      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: this.planDetails.approval },
+      { stepId: 8, name: 'Submit', status: 'PENDING', detail: this.planDetails.submit.replace('{target}', target) }
     ];
   }
 
   public async get_recommendations(intent: string): Promise<WorkflowRecommendation> {
-    return workflowPlanningAgent.plan_workflow_options(intent, 'employment');
+    return workflowPlanningAgent.plan_workflow_options(intent, this.domain);
   }
 }
 
-export class GovernmentBureaucracyAgent implements IDomainAgent {
-  public readonly domain = 'government' as const;
-  public readonly name = 'government';
-  public readonly principal: CedarPrincipal = 'EvaAgent::"government"';
-  public readonly systemPrompt = `You are the EVA Government & Bureaucracy Agent. You understand civic registration, municipal filings, and regulatory compliance. You enforce strict identity grounding and zero-hallucination boundary checks.`;
-
-  public async get_required_fields(template: string): Promise<CanonicalField[]> {
-    const config = TEMPLATES[template] || TEMPLATES['government_civic_clearance'];
-    return [...config.fieldSchema.map((f) => f.field), 'tax_identification_number' as CanonicalField];
-  }
-
-  public async validate_document_checklist(
-    template: string,
-    availableDocumentIds: string[]
-  ): Promise<{ met: string[]; missing: string[] }> {
-    const config = TEMPLATES[template] || TEMPLATES['government_civic_clearance'];
-    const available = new Set(availableDocumentIds);
-    return {
-      met: config.documentIds.filter((id) => available.has(id)),
-      missing: config.documentIds.filter((id) => !available.has(id))
-    };
-  }
-
-  public async compile_domain_plan(template: string, intent: string): Promise<WorkflowStep[]> {
-    const config = TEMPLATES[template] || TEMPLATES['government_civic_clearance'];
-    return [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Citizen Goal → ${config.title}` },
-      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: 'Statutory proof of identity and residence' },
-      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: 'Structured extraction of official records' },
-      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: 'Jurisdiction & address alignment' },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar PDP statutory authorization' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `Prepare filing for ${config.targetSystem}` },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Citizen explicit sign-off' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Submission to government endpoint' }
-    ];
-  }
-
-  public async get_recommendations(intent: string): Promise<WorkflowRecommendation> {
-    return workflowPlanningAgent.plan_workflow_options(intent, 'government');
+export class EmploymentDomainAgent extends BaseDomainAgent {
+  constructor() {
+    super(
+      'employment',
+      'employment',
+      'EvaAgent::"employment"',
+      'You are the EVA Employment Domain Agent. You handle internship and employment onboarding, offer-letter interpretation, and required credential checklists. You work from metadata and schemas, never raw documents.',
+      'bank_account_number',
+      'internship_onboarding',
+      {
+        understand: 'Intent → {title}',
+        gather: '{count} required documents',
+        extract: 'Evidence Agent structured extraction',
+        reconcile: 'Deterministic comparator',
+        authorize: 'Cedar PDP evaluation',
+        populate: 'Form Filling Agent plan for {target}',
+        approval: 'Action-bound human approval gate',
+        submit: 'Consequential dispatch to {target}'
+      }
+    );
   }
 }
 
-export class HealthcareAdminAgent implements IDomainAgent {
-  public readonly domain = 'healthcare' as const;
-  public readonly name = 'healthcare';
-  public readonly principal: CedarPrincipal = 'EvaAgent::"healthcare"';
-  public readonly systemPrompt = `You are the EVA Healthcare Administration Agent. You understand health insurance reimbursement, clinical admission documentation, and pharmacy invoices.`;
-
-  public async get_required_fields(template: string): Promise<CanonicalField[]> {
-    const config = TEMPLATES[template] || TEMPLATES['medical_reimbursement'];
-    return [...config.fieldSchema.map((f) => f.field), 'patient_medical_record_number' as CanonicalField];
-  }
-
-  public async validate_document_checklist(
-    template: string,
-    availableDocumentIds: string[]
-  ): Promise<{ met: string[]; missing: string[] }> {
-    const config = TEMPLATES[template] || TEMPLATES['medical_reimbursement'];
-    const available = new Set(availableDocumentIds);
-    return {
-      met: config.documentIds.filter((id) => available.has(id)),
-      missing: config.documentIds.filter((id) => !available.has(id))
-    };
-  }
-
-  public async compile_domain_plan(template: string, intent: string): Promise<WorkflowStep[]> {
-    const config = TEMPLATES[template] || TEMPLATES['medical_reimbursement'];
-    return [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Clinical Goal → ${config.title}` },
-      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: 'Hospital bill & physician summary' },
-      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: 'Itemized extraction of clinical charges' },
-      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: 'Admission and discharge date check' },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar PDP insurance policy compliance' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: `TPA portal claim preparation` },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Policyholder claim review' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Claim submission to insurance sandbox' }
-    ];
-  }
-
-  public async get_recommendations(intent: string): Promise<WorkflowRecommendation> {
-    return workflowPlanningAgent.plan_workflow_options(intent, 'healthcare');
+export class GovernmentBureaucracyAgent extends BaseDomainAgent {
+  constructor() {
+    super(
+      'government',
+      'government',
+      'EvaAgent::"government"',
+      'You are the EVA Government & Bureaucracy Agent. You understand civic registration, municipal filings, and regulatory compliance. You enforce strict identity grounding and zero-hallucination boundary checks.',
+      'tax_identification_number',
+      'government_civic_clearance',
+      {
+        understand: 'Citizen Goal → {title}',
+        gather: 'Statutory proof of identity and residence',
+        extract: 'Structured extraction of official records',
+        reconcile: 'Jurisdiction & address alignment',
+        authorize: 'Cedar PDP statutory authorization',
+        populate: 'Prepare filing for {target}',
+        approval: 'Citizen explicit sign-off',
+        submit: 'Submission to government endpoint'
+      }
+    );
   }
 }
 
-export class FinanceProcurementAgent implements IDomainAgent {
-  public readonly domain = 'finance' as const;
-  public readonly name = 'finance';
-  public readonly principal: CedarPrincipal = 'EvaAgent::"finance"';
-  public readonly systemPrompt = `You are the EVA Finance & Procurement Agent. You understand corporate payouts, bank routing IFSC reconciliation, and hardware procurement.`;
-
-  public async get_required_fields(template: string): Promise<CanonicalField[]> {
-    const config = TEMPLATES[template] || TEMPLATES['vendor_payout_update'];
-    return [...config.fieldSchema.map((f) => f.field), 'corporate_swift_code' as CanonicalField];
-  }
-
-  public async validate_document_checklist(
-    template: string,
-    availableDocumentIds: string[]
-  ): Promise<{ met: string[]; missing: string[] }> {
-    const config = TEMPLATES[template] || TEMPLATES['vendor_payout_update'];
-    const available = new Set(availableDocumentIds);
-    return {
-      met: config.documentIds.filter((id) => available.has(id)),
-      missing: config.documentIds.filter((id) => !available.has(id))
-    };
-  }
-
-  public async compile_domain_plan(template: string, intent: string): Promise<WorkflowStep[]> {
-    const config = TEMPLATES[template] || TEMPLATES['vendor_payout_update'];
-    return [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Financial Goal → ${config.title}` },
-      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: 'Bank proof & corporate agreement' },
-      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: 'IFSC, account, and remit extraction' },
-      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: 'Banking coordinate verification' },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar PDP financial authorization' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: 'Treasury update preparation' },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Authorized signatory sign-off' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Dispatch to banking gateway' }
-    ];
-  }
-
-  public async get_recommendations(intent: string): Promise<WorkflowRecommendation> {
-    return workflowPlanningAgent.plan_workflow_options(intent, 'finance');
+export class HealthcareAdminAgent extends BaseDomainAgent {
+  constructor() {
+    super(
+      'healthcare',
+      'healthcare',
+      'EvaAgent::"healthcare"',
+      'You are the EVA Healthcare Administration Agent. You understand health insurance reimbursement, clinical admission documentation, and pharmacy invoices.',
+      'patient_medical_record_number',
+      'medical_reimbursement',
+      {
+        understand: 'Clinical Goal → {title}',
+        gather: 'Hospital bill & physician summary',
+        extract: 'Itemized extraction of clinical charges',
+        reconcile: 'Admission and discharge date check',
+        authorize: 'Cedar PDP insurance policy compliance',
+        populate: 'TPA portal claim preparation',
+        approval: 'Policyholder claim review',
+        submit: 'Claim submission to insurance sandbox'
+      }
+    );
   }
 }
 
-export class EducationDomainAgent implements IDomainAgent {
-  public readonly domain = 'education' as const;
-  public readonly name = 'education';
-  public readonly principal: CedarPrincipal = 'EvaAgent::"education"';
-  public readonly systemPrompt = `You are the EVA Education Domain Agent. You understand university NOCs, academic transcripts, degree verification, and institutional prerequisites.`;
-
-  public async get_required_fields(template: string): Promise<CanonicalField[]> {
-    const config = TEMPLATES[template] || TEMPLATES['education_credential_verification'];
-    return [...config.fieldSchema.map((f) => f.field), 'student_enrollment_pin' as CanonicalField];
-  }
-
-  public async validate_document_checklist(
-    template: string,
-    availableDocumentIds: string[]
-  ): Promise<{ met: string[]; missing: string[] }> {
-    const config = TEMPLATES[template] || TEMPLATES['education_credential_verification'];
-    const available = new Set(availableDocumentIds);
-    return {
-      met: config.documentIds.filter((id) => available.has(id)),
-      missing: config.documentIds.filter((id) => !available.has(id))
-    };
-  }
-
-  public async compile_domain_plan(template: string, intent: string): Promise<WorkflowStep[]> {
-    const config = TEMPLATES[template] || TEMPLATES['education_credential_verification'];
-    return [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Academic Goal → ${config.title}` },
-      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: 'Transcripts & university NOC' },
-      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: 'Degree and registration extraction' },
-      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: 'Academic identity reconciliation' },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar PDP verification' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: 'Registrar submission preparation' },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Student confirmation gate' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Submission to academic portal' }
-    ];
-  }
-
-  public async get_recommendations(intent: string): Promise<WorkflowRecommendation> {
-    return workflowPlanningAgent.plan_workflow_options(intent, 'education');
+export class FinanceProcurementAgent extends BaseDomainAgent {
+  constructor() {
+    super(
+      'finance',
+      'finance',
+      'EvaAgent::"finance"',
+      'You are the EVA Finance & Procurement Agent. You understand corporate payouts, bank routing IFSC reconciliation, and hardware procurement.',
+      'corporate_swift_code',
+      'vendor_payout_update',
+      {
+        understand: 'Financial Goal → {title}',
+        gather: 'Bank proof & corporate agreement',
+        extract: 'IFSC, account, and remit extraction',
+        reconcile: 'Banking coordinate verification',
+        authorize: 'Cedar PDP financial authorization',
+        populate: 'Treasury update preparation',
+        approval: 'Authorized signatory sign-off',
+        submit: 'Dispatch to banking gateway'
+      }
+    );
   }
 }
 
-export class LegalComplianceAgent implements IDomainAgent {
-  public readonly domain = 'legal' as const;
-  public readonly name = 'legal';
-  public readonly principal: CedarPrincipal = 'EvaAgent::"legal"';
-  public readonly systemPrompt = `You are the EVA Legal & Compliance Agent. You understand NDA execution, contract terms, privacy disclosures, and statutory compliance.`;
-
-  public async get_required_fields(template: string): Promise<CanonicalField[]> {
-    const config = TEMPLATES[template] || TEMPLATES['internship_onboarding'];
-    return [...config.fieldSchema.map((f) => f.field), 'attorney_client_privilege_token' as CanonicalField];
+export class EducationDomainAgent extends BaseDomainAgent {
+  constructor() {
+    super(
+      'education',
+      'education',
+      'EvaAgent::"education"',
+      'You are the EVA Education Domain Agent. You understand university NOCs, academic transcripts, degree verification, and institutional prerequisites.',
+      'student_enrollment_pin',
+      'education_credential_verification',
+      {
+        understand: 'Academic Goal → {title}',
+        gather: 'Transcripts & university NOC',
+        extract: 'Degree and registration extraction',
+        reconcile: 'Academic identity reconciliation',
+        authorize: 'Cedar PDP verification',
+        populate: 'Registrar submission preparation',
+        approval: 'Student confirmation gate',
+        submit: 'Submission to academic portal'
+      }
+    );
   }
+}
 
-  public async validate_document_checklist(
-    template: string,
-    availableDocumentIds: string[]
-  ): Promise<{ met: string[]; missing: string[] }> {
-    const config = TEMPLATES[template] || TEMPLATES['internship_onboarding'];
-    const available = new Set(availableDocumentIds);
-    return {
-      met: config.documentIds.filter((id) => available.has(id)),
-      missing: config.documentIds.filter((id) => !available.has(id))
-    };
-  }
-
-  public async compile_domain_plan(template: string, intent: string): Promise<WorkflowStep[]> {
-    const config = TEMPLATES[template] || TEMPLATES['internship_onboarding'];
-    return [
-      { stepId: 1, name: 'Understand request', status: 'COMPLETED', detail: `Compliance Goal → ${config.title}` },
-      { stepId: 2, name: 'Gather documents', status: 'IN_PROGRESS', detail: 'Legal agreements & disclosures' },
-      { stepId: 3, name: 'Extract evidence', status: 'PENDING', detail: 'Extraction of binding clauses' },
-      { stepId: 4, name: 'Reconcile information', status: 'PENDING', detail: 'Legal entity reconciliation' },
-      { stepId: 5, name: 'Authorize actions', status: 'PENDING', detail: 'Cedar PDP statutory compliance' },
-      { stepId: 6, name: 'Populate form', status: 'PENDING', detail: 'Disclosure filing preparation' },
-      { stepId: 7, name: 'Request approval', status: 'PENDING', detail: 'Signatory consent gate' },
-      { stepId: 8, name: 'Submit', status: 'PENDING', detail: 'Dispatch to legal archive' }
-    ];
-  }
-
-  public async get_recommendations(intent: string): Promise<WorkflowRecommendation> {
-    return workflowPlanningAgent.plan_workflow_options(intent, 'legal');
+export class LegalComplianceAgent extends BaseDomainAgent {
+  constructor() {
+    super(
+      'legal',
+      'legal',
+      'EvaAgent::"legal"',
+      'You are the EVA Legal & Compliance Agent. You understand NDA execution, contract terms, privacy disclosures, and statutory compliance.',
+      'attorney_client_privilege_token',
+      'internship_onboarding',
+      {
+        understand: 'Compliance Goal → {title}',
+        gather: 'Legal agreements & disclosures',
+        extract: 'Extraction of binding clauses',
+        reconcile: 'Legal entity reconciliation',
+        authorize: 'Cedar PDP statutory compliance',
+        populate: 'Disclosure filing preparation',
+        approval: 'Signatory consent gate',
+        submit: 'Dispatch to legal archive'
+      }
+    );
   }
 }
 

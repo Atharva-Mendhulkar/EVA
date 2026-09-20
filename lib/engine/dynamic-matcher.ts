@@ -29,20 +29,20 @@ const KNOWN_VAULT_FACTS: VaultFact[] = [
     value: 'Atharva Mendhulkar',
     docId: 'doc_profile_01',
     docName: 'Personal_Profile.pdf',
-    sourceLocation: 'Page 1, Header Block',
-    sourceExcerpt: 'Full Legal Name: Atharva Mendhulkar',
+    sourceLocation: 'Page 1, Header',
+    sourceExcerpt: 'Candidate Name: Atharva Mendhulkar',
     confidence: 0.99,
   },
   // Email Address
   {
     keywords: ['email', 'email address', 'e-mail', 'contact email', 'mail id', 'your email'],
     canonicalField: 'email_address',
-    value: 'atharvamendhulkar01@gmail.com',
+    value: 'candidate.onboarding@acme.com',
     docId: 'doc_profile_01',
     docName: 'Personal_Profile.pdf',
-    sourceLocation: 'Page 1, Identity Block',
-    sourceExcerpt: 'Verified Primary Contact: atharvamendhulkar01@gmail.com',
-    confidence: 0.99,
+    sourceLocation: 'Page 1, Contact',
+    sourceExcerpt: 'Contact: candidate.onboarding@acme.com',
+    confidence: 0.98,
   },
   // Phone Number
   {
@@ -51,7 +51,7 @@ const KNOWN_VAULT_FACTS: VaultFact[] = [
     value: '+91 98765 43210',
     docId: 'doc_profile_01',
     docName: 'Personal_Profile.pdf',
-    sourceLocation: 'Page 1, Identity Block',
+    sourceLocation: 'Page 1, Contact',
     sourceExcerpt: 'Phone: +91 98765 43210',
     confidence: 0.98,
   },
@@ -115,33 +115,33 @@ const KNOWN_VAULT_FACTS: VaultFact[] = [
     keywords: ['github', 'portfolio', 'website', 'github profile', 'profile link', 'project url', 'repository'],
     canonicalField: 'github_profile',
     value: 'https://github.com/Atharva-Mendhulkar',
-    docId: 'doc_profile_01',
-    docName: 'Personal_Profile.pdf',
+    docId: 'doc_offer_01',
+    docName: '01_Internship_Offer_Letter.txt',
     sourceLocation: 'Page 1, Links Section',
-    sourceExcerpt: 'GitHub Repository Profile: https://github.com/Atharva-Mendhulkar',
-    confidence: 0.99,
+    sourceExcerpt: 'GitHub: https://github.com/Atharva-Mendhulkar',
+    confidence: 0.95,
   },
   // LinkedIn
   {
     keywords: ['linkedin', 'linkedin profile', 'linkedin url'],
     canonicalField: 'linkedin_profile',
-    value: 'https://linkedin.com/in/atharvamendhulkar',
-    docId: 'doc_profile_01',
-    docName: 'Personal_Profile.pdf',
+    value: 'https://linkedin.com/in/applicant',
+    docId: 'doc_offer_01',
+    docName: '01_Internship_Offer_Letter.txt',
     sourceLocation: 'Page 1, Links Section',
-    sourceExcerpt: 'LinkedIn: https://linkedin.com/in/atharvamendhulkar',
-    confidence: 0.97,
+    sourceExcerpt: 'LinkedIn: https://linkedin.com/in/applicant',
+    confidence: 0.95,
   },
   // Experience / Notes
   {
     keywords: ['experience', 'years of experience', 'background', 'notes', 'summary', 'about you', 'description'],
     canonicalField: 'experience_summary',
-    value: '2+ years building autonomous AI agents, distributed systems, and cryptographic audit pipelines.',
-    docId: 'doc_profile_01',
-    docName: 'Personal_Profile.pdf',
-    sourceLocation: 'Page 2, Summary of Qualifications',
-    sourceExcerpt: 'Experience: 2+ years building autonomous AI agents, distributed systems, and cryptographic audit pipelines.',
-    confidence: 0.94,
+    value: 'Demonstrated experience in software engineering and distributed systems verification.',
+    docId: 'doc_noc_02',
+    docName: '02_College_NOC.txt',
+    sourceLocation: 'Page 1, Certification',
+    sourceExcerpt: 'Demonstrated experience in software engineering and distributed systems verification.',
+    confidence: 0.92,
   },
   // Device Spec
   {
@@ -189,13 +189,39 @@ const KNOWN_VAULT_FACTS: VaultFact[] = [
   },
 ];
 
+function findEvidenceForQuestion(qText: string, evidencePool: Evidence[]): Evidence[] {
+  const matches: Evidence[] = [];
+  for (const ev of evidencePool) {
+    const f = ev.field.toLowerCase();
+    if (
+      (f.includes('name') && (qText.includes('name') || qText.includes('applicant') || qText.includes('candidate') || qText.includes('student') || qText.includes('employee'))) ||
+      (f.includes('email') && (qText.includes('email') || qText.includes('mail'))) ||
+      (f.includes('phone') && (qText.includes('phone') || qText.includes('mobile') || qText.includes('contact'))) ||
+      (f.includes('location') && (qText.includes('location') || qText.includes('city') || qText.includes('stationed') || qText.includes('office'))) ||
+      (f.includes('start_date') && (qText.includes('start date') || qText.includes('commencement') || qText.includes('joining'))) ||
+      (f.includes('university') && (qText.includes('university') || qText.includes('college') || qText.includes('institution') || qText.includes('school'))) ||
+      ((f.includes('employer') || f.includes('company') || f.includes('vendor')) && (qText.includes('employer') || qText.includes('company') || qText.includes('organization') || qText.includes('firm'))) ||
+      (f.includes('role') && (qText.includes('role') || qText.includes('position') || qText.includes('designation') || qText.includes('title'))) ||
+      (f.includes('device') && (qText.includes('device') || qText.includes('laptop') || qText.includes('workstation'))) ||
+      (f.includes('ram') && (qText.includes('ram') || qText.includes('memory'))) ||
+      (f.includes('amount') && (qText.includes('amount') || qText.includes('total') || qText.includes('claim') || qText.includes('budget'))) ||
+      (f.includes('ifsc') && (qText.includes('ifsc') || qText.includes('branch code'))) ||
+      (f.includes('account') && (qText.includes('account') || qText.includes('bank account')))
+    ) {
+      matches.push(ev);
+    }
+  }
+  return matches;
+}
+
 /**
  * Perform intelligent matching of questions against personal vault records.
  */
 export function matchFormQuestionsToVault(
   questions: FormQuestion[],
   workflowRunId: string,
-  uploadedDocText?: string
+  uploadedDocText?: string,
+  availableEvidence?: Evidence[]
 ): DynamicMatchResult {
   const evidenceList: Evidence[] = [];
   const conflicts: Conflict[] = [];
@@ -205,7 +231,63 @@ export function matchFormQuestionsToVault(
   for (const q of questions) {
     const qText = `${q.title} ${q.description || ''}`.toLowerCase();
 
-    // 1. Check for custom uploaded text first if available
+    // 1. Check in user's attached/uploaded document evidence first (strict zero-hallucination ground)
+    if (availableEvidence && availableEvidence.length > 0) {
+      const candidates = findEvidenceForQuestion(qText, availableEvidence);
+      if (candidates.length > 0) {
+        const primaryEv = candidates[0];
+        let chosenValue = primaryEv.value;
+
+        if (q.options && q.options.length > 0) {
+          const matchingOption = q.options.find(
+            (opt) =>
+              opt.toLowerCase().includes(chosenValue.toLowerCase()) ||
+              chosenValue.toLowerCase().includes(opt.toLowerCase())
+          );
+          if (matchingOption) chosenValue = matchingOption;
+        }
+
+        const ev: Evidence = {
+          ...primaryEv,
+          evidenceId: `ev_dyn_${q.entryName || q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          workflowRunId,
+          field: q.entryName || primaryEv.field,
+          value: chosenValue,
+          provenanceStatus: 'SOURCE_BACKED'
+        };
+        evidenceList.push(ev);
+
+        // Check if multiple sources in available evidence conflict
+        if (candidates.length > 1) {
+          const normA = normalizeFieldValue(primaryEv.field, primaryEv.value);
+          const conflictCand = candidates.find((c) => normalizeFieldValue(c.field, c.value) !== normA);
+          if (conflictCand) {
+            conflicts.push({
+              conflictId: `conf_dyn_${primaryEv.field}_${Date.now()}`,
+              workflowRunId,
+              field: q.entryName || primaryEv.field,
+              candidateEvidence: [primaryEv, conflictCand],
+              severity: 'critical',
+              status: 'open',
+              selectedEvidenceId: null,
+              resolvedBy: null,
+              resolvedAt: null,
+              comparatorAnalysis: {
+                field: q.entryName || primaryEv.field,
+                normalizedA: normA,
+                normalizedB: normalizeFieldValue(conflictCand.field, conflictCand.value),
+                comparison: 'DIFFERENT',
+                result: 'EXECUTION BLOCKED',
+                reason: `Conflicting records detected between ${primaryEv.sourceDocumentName} (${primaryEv.value}) and ${conflictCand.sourceDocumentName} (${conflictCand.value}). Human verification required.`
+              }
+            });
+          }
+        }
+        continue;
+      }
+    }
+
+    // 2. Check for custom uploaded text if available
     let customMatchValue: string | null = null;
     if (uploadedDocText) {
       const qWords = q.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
@@ -219,7 +301,12 @@ export function matchFormQuestionsToVault(
       }
     }
 
-    // 2. Score against known vault facts
+    // 3. Fallback to known vault facts (ONLY when no specific documents were attached/uploaded)
+    if (availableEvidence && availableEvidence.length > 0) {
+      unmatched.push(q);
+      continue;
+    }
+
     let bestFact: VaultFact | null = null;
     let highestScore = 0;
 
@@ -227,7 +314,6 @@ export function matchFormQuestionsToVault(
       let score = 0;
       for (const kw of fact.keywords) {
         if (qText.includes(kw)) {
-          // Exact keyword phrase match gives highest weight
           const weight = kw.split(' ').length * 10;
           if (weight > score) score = weight;
         }

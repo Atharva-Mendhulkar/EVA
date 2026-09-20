@@ -44,6 +44,17 @@ export interface FormQuestion {
   required: boolean;
 }
 
+export interface FormAccessibilityNode {
+  role: 'form' | 'textbox' | 'combobox' | 'radiogroup' | 'checkbox' | 'button' | 'heading';
+  name: string;
+  selector: string;
+  required: boolean;
+  type: 'text' | 'textarea' | 'radio' | 'dropdown' | 'checkbox' | 'other';
+  entryName?: string;
+  options?: string[];
+  currentValue?: string;
+}
+
 export interface ParsedFormSchema {
   formId: string;
   title: string;
@@ -52,6 +63,8 @@ export interface ParsedFormSchema {
   questions: FormQuestion[];
   isGoogleForm: boolean;
   rawUrl: string;
+  formType?: 'google_forms' | 'microsoft_forms' | 'web_form';
+  accessibilityTree?: FormAccessibilityNode[];
 }
 
 export type ProvenanceStatus = 'SOURCE_BACKED' | 'USER_ASSERTED' | 'SYSTEM_DERIVED';
@@ -306,6 +319,7 @@ export interface WorkflowRun {
   approvalChallenge?: ApprovalChallenge;
   latestExplanation?: DecisionExplanation;
   agentResponse?: string;
+  externalReceiptHash?: string;
   parsedFormSchema?: ParsedFormSchema;
   suggestions?: { title: string; prompt: string; template?: string }[];
   createdAt: string;
@@ -322,14 +336,6 @@ export interface DocumentMetadata {
   description: string;
 }
 
-export interface ProvenanceTag {
-  evidenceId: string;
-  sourceDocumentName: string;
-  sourceLocation: string;
-  confidence: number;
-  userConfirmed: boolean;
-}
-
 export interface VaultSearchResult {
   documentId: string;
   name: string;
@@ -338,47 +344,6 @@ export interface VaultSearchResult {
   tags: string[];
   updatedAt: string;
   isFresh: boolean;
-}
-
-export interface WebSearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-  timestamp: string;
-  isUntrusted: true;
-}
-
-export interface RankedDocument {
-  documentId: string;
-  name: string;
-  score: number;
-  reasons: string[];
-}
-
-export interface AuditViolation {
-  type: 'MISSING_EVENT' | 'CHRONOLOGY_ERROR' | 'CEDAR_INCONSISTENCY' | 'HALLUCINATION_DETECTED' | 'INTEGRITY_GAP';
-  description: string;
-  severity: 'critical' | 'warning';
-  relatedEventIds: string[];
-}
-
-export interface AuditResult {
-  workflowRunId: string;
-  auditedAt: string;
-  result: 'PASS' | 'FAIL';
-  totalEvents: number;
-  totalCedarDecisions: number;
-  totalEvidenceRecords: number;
-  violations: AuditViolation[];
-  complianceScore: number;
-}
-
-export interface ComplianceReport {
-  workflowRunId: string;
-  status: 'COMPLIANT' | 'NON_COMPLIANT';
-  generatedAt: string;
-  auditResult: AuditResult;
-  recommendations: string[];
 }
 
 export interface SubmissionReceipt {
@@ -391,10 +356,4 @@ export interface SubmissionReceipt {
   fieldsSubmitted: number;
 }
 
-export interface FormPopulationResult {
-  formId: string;
-  fieldsPopulated: number;
-  allVerified: boolean;
-  fields: FormField[];
-}
 
