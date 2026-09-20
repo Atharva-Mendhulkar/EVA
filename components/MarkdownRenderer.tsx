@@ -7,11 +7,11 @@ interface MarkdownRendererProps {
   className?: string;
 }
 
-// Inline formatting: parses bold, italic, code
+// Inline formatting: parses bold, links, code, italic
 function parseInline(text: string): React.ReactNode {
   if (!text) return null;
 
-  // Split by inline code: `code`
+  // 1. Split by inline code: `code`
   const codeParts = text.split(/(`[^`]+`)/g);
   return codeParts.map((part, i) => {
     if (part.startsWith('`') && part.endsWith('`')) {
@@ -24,35 +24,260 @@ function parseInline(text: string): React.ReactNode {
         </code>
       );
     }
-
-    // Parse bold: **text**
-    const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
-    return boldParts.map((bPart, j) => {
-      if (bPart.startsWith('**') && bPart.endsWith('**')) {
-        return (
-          <strong key={`${i}-${j}`} className="font-semibold text-white">
-            {parseItalics(bPart.slice(2, -2), `${i}-${j}`)}
-          </strong>
-        );
-      }
-      return parseItalics(bPart, `${i}-${j}`);
-    });
+    return parseFormatted(part, `c-${i}`);
   });
 }
 
-function parseItalics(text: string, keyPrefix: string = 'it'): React.ReactNode {
-  // Parse *italic*
-  const italicParts = text.split(/(\*[^*]+\*)/g);
-  return italicParts.map((part, k) => {
+function parseFormatted(text: string, keyPrefix: string): React.ReactNode {
+  // Tokenize bold-links **[label](url)**, normal links [label](url), bold **text**, and italic *text*
+  const tokenRegex = /(\*\*\[[^\]]+\]\([^\s)]+\)\*\*|\[[^\]]+\]\([^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  const parts = text.split(tokenRegex);
+
+  return parts.map((part, idx) => {
+    const key = `${keyPrefix}-${idx}`;
+
+    // Bold Link: **[label](url)**
+    if (part.startsWith('**[') && part.endsWith(')**')) {
+      const inner = part.slice(2, -2);
+      const match = inner.match(/^\[([^\]]+)\]\(([^\s)]+)\)$/);
+      if (match) {
+        return (
+          <strong key={key} className="font-semibold text-white">
+            <a
+              href={match[2]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 font-medium transition-colors"
+            >
+              {match[1]}
+            </a>
+          </strong>
+        );
+      }
+    }
+
+    // Normal Link: [label](url)
+    if (part.startsWith('[') && part.endsWith(')') && part.includes('](')) {
+      const match = part.match(/^\[([^\]]+)\]\(([^\s)]+)\)$/);
+      if (match) {
+        return (
+          <a
+            key={key}
+            href={match[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 font-medium transition-colors"
+          >
+            {match[1]}
+          </a>
+        );
+      }
+    }
+
+    // Bold text: **text**
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={key} className="font-semibold text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    // Italic text: *text*
     if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
       return (
-        <em key={`${keyPrefix}-${k}`} className="italic text-zinc-200">
+        <em key={key} className="italic text-zinc-300">
           {part.slice(1, -1)}
         </em>
       );
     }
+
     return part;
   });
+}
+
+function renderBlock(trimmed: string, keyPrefix: string): React.ReactNode {
+  if (!trimmed) return null;
+
+  // Horizontal divider: --- or *** or ___
+  if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+    return <hr key={keyPrefix} className="border-t border-zinc-800 my-2" />;
+  }
+
+  // Heading 4: ####
+  if (trimmed.startsWith('#### ')) {
+    const nl = trimmed.indexOf('\n');
+    if (nl !== -1) {
+      const heading = trimmed.slice(0, nl).replace(/^####\s+/, '');
+      const rest = trimmed.slice(nl + 1).trim();
+      return (
+        <React.Fragment key={keyPrefix}>
+          <h5 className="text-xs font-semibold text-zinc-200 tracking-wide mt-2 mb-1">
+            {parseInline(heading)}
+          </h5>
+          {renderBlock(rest, `${keyPrefix}-rest`)}
+        </React.Fragment>
+      );
+    }
+    return (
+      <h5 key={keyPrefix} className="text-xs font-semibold text-zinc-200 tracking-wide mt-2 mb-1">
+        {parseInline(trimmed.replace(/^####\s+/, ''))}
+      </h5>
+    );
+  }
+
+  // Heading 3: ###
+  if (trimmed.startsWith('### ')) {
+    const nl = trimmed.indexOf('\n');
+    if (nl !== -1) {
+      const heading = trimmed.slice(0, nl).replace(/^###\s+/, '');
+      const rest = trimmed.slice(nl + 1).trim();
+      return (
+        <React.Fragment key={keyPrefix}>
+          <h4 className="text-sm font-semibold text-white mt-2 mb-1">
+            {parseInline(heading)}
+          </h4>
+          {renderBlock(rest, `${keyPrefix}-rest`)}
+        </React.Fragment>
+      );
+    }
+    return (
+      <h4 key={keyPrefix} className="text-sm font-semibold text-white mt-2 mb-1">
+        {parseInline(trimmed.replace(/^###\s+/, ''))}
+      </h4>
+    );
+  }
+
+  // Heading 2: ##
+  if (trimmed.startsWith('## ')) {
+    const nl = trimmed.indexOf('\n');
+    if (nl !== -1) {
+      const heading = trimmed.slice(0, nl).replace(/^##\s+/, '');
+      const rest = trimmed.slice(nl + 1).trim();
+      return (
+        <React.Fragment key={keyPrefix}>
+          <h3 className="text-base font-semibold text-white mt-3 mb-1">
+            {parseInline(heading)}
+          </h3>
+          {renderBlock(rest, `${keyPrefix}-rest`)}
+        </React.Fragment>
+      );
+    }
+    return (
+      <h3 key={keyPrefix} className="text-base font-semibold text-white mt-3 mb-1">
+        {parseInline(trimmed.replace(/^##\s+/, ''))}
+      </h3>
+    );
+  }
+
+  // Heading 1: #
+  if (trimmed.startsWith('# ')) {
+    const nl = trimmed.indexOf('\n');
+    if (nl !== -1) {
+      const heading = trimmed.slice(0, nl).replace(/^#\s+/, '');
+      const rest = trimmed.slice(nl + 1).trim();
+      return (
+        <React.Fragment key={keyPrefix}>
+          <h2 className="text-lg font-bold text-white mt-3 mb-1">
+            {parseInline(heading)}
+          </h2>
+          {renderBlock(rest, `${keyPrefix}-rest`)}
+        </React.Fragment>
+      );
+    }
+    return (
+      <h2 key={keyPrefix} className="text-lg font-bold text-white mt-3 mb-1">
+        {parseInline(trimmed.replace(/^#\s+/, ''))}
+      </h2>
+    );
+  }
+
+  // Blockquote: >
+  if (trimmed.startsWith('> ')) {
+    return (
+      <blockquote
+        key={keyPrefix}
+        className="border-l-2 border-zinc-500 pl-3 py-1 my-1 text-xs text-zinc-400 italic bg-zinc-900/40 rounded-r"
+      >
+        {parseInline(trimmed.replace(/^>\s*/gm, ''))}
+      </blockquote>
+    );
+  }
+
+  // Pure Bullet list: all lines start with - or *
+  const lines = trimmed.split('\n');
+  const isBulletList = lines.every((line) => /^\s*[-*]\s+/.test(line));
+  if (isBulletList) {
+    return (
+      <ul key={keyPrefix} className="flex flex-col gap-1.5 my-1 pl-4 list-disc text-zinc-300">
+        {lines.map((line, lIdx) => (
+          <li key={lIdx} className="text-xs leading-normal">
+            {parseInline(line.replace(/^\s*[-*]\s+/, ''))}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  // Pure Numbered list: all lines start with 1. or 2.
+  const isNumberedList = lines.every((line) => /^\s*\d+\.\s+/.test(line));
+  if (isNumberedList) {
+    return (
+      <ol key={keyPrefix} className="flex flex-col gap-1.5 my-1 pl-4 list-decimal text-zinc-300">
+        {lines.map((line, lIdx) => (
+          <li key={lIdx} className="text-xs leading-normal">
+            {parseInline(line.replace(/^\s*\d+\.\s+/, ''))}
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  // Mixed lines with bullets or numbered entries with indented sub-bullets
+  if (lines.length > 1 && lines.some((l) => /^\s*[-*]\s+/.test(l) || /^\s*\d+\.\s+/.test(l))) {
+    return (
+      <div key={keyPrefix} className="flex flex-col gap-1.5 my-1">
+        {lines.map((line, lIdx) => {
+          const bulletMatch = line.match(/^(\s*)[-*]\s+(.*)$/);
+          if (bulletMatch) {
+            const isIndented = bulletMatch[1].length >= 2;
+            return (
+              <div
+                key={lIdx}
+                className={`flex items-start gap-2 ${isIndented ? 'pl-5 text-zinc-400' : 'pl-2 text-zinc-300'} text-xs leading-relaxed`}
+              >
+                <span className="text-zinc-500 flex-none mt-1 text-[10px]">•</span>
+                <div className="flex-1">{parseInline(bulletMatch[2])}</div>
+              </div>
+            );
+          }
+
+          const numMatch = line.match(/^(\s*)(\d+\.)\s+(.*)$/);
+          if (numMatch) {
+            return (
+              <div key={lIdx} className="flex items-start gap-2 text-xs leading-relaxed mt-1">
+                <span className="text-zinc-400 font-mono text-[11px] flex-none">{numMatch[2]}</span>
+                <div className="flex-1 font-medium text-white">{parseInline(numMatch[3])}</div>
+              </div>
+            );
+          }
+
+          return (
+            <p key={lIdx} className="text-xs leading-relaxed text-zinc-300">
+              {parseInline(line)}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Standard paragraph
+  return (
+    <p key={keyPrefix} className="text-xs leading-relaxed">
+      {parseInline(trimmed)}
+    </p>
+  );
 }
 
 export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
@@ -89,118 +314,7 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         const paragraphs = block.split(/\n\n+/);
 
         return paragraphs.map((para, pIdx) => {
-          const trimmed = para.trim();
-          if (!trimmed) return null;
-
-          // Heading 3: ###
-          if (trimmed.startsWith('### ')) {
-            return (
-              <h4 key={`${index}-${pIdx}`} className="text-sm font-semibold text-white mt-2 mb-1">
-                {parseInline(trimmed.replace(/^###\s+/, ''))}
-              </h4>
-            );
-          }
-
-          // Heading 2: ##
-          if (trimmed.startsWith('## ')) {
-            return (
-              <h3 key={`${index}-${pIdx}`} className="text-base font-semibold text-white mt-3 mb-1">
-                {parseInline(trimmed.replace(/^##\s+/, ''))}
-              </h3>
-            );
-          }
-
-          // Heading 1: #
-          if (trimmed.startsWith('# ')) {
-            return (
-              <h2 key={`${index}-${pIdx}`} className="text-lg font-bold text-white mt-3 mb-1">
-                {parseInline(trimmed.replace(/^#\s+/, ''))}
-              </h2>
-            );
-          }
-
-          // Blockquote: >
-          if (trimmed.startsWith('> ')) {
-            return (
-              <blockquote
-                key={`${index}-${pIdx}`}
-                className="border-l-2 border-zinc-500 pl-3 py-1 my-1 text-xs text-zinc-400 italic bg-zinc-900/40 rounded-r"
-              >
-                {parseInline(trimmed.replace(/^>\s*/gm, ''))}
-              </blockquote>
-            );
-          }
-
-          // Warning / Alert banner: starts with ⚠️
-          if (trimmed.startsWith('⚠️')) {
-            return (
-              <div
-                key={`${index}-${pIdx}`}
-                className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-700/80 text-xs text-zinc-200 my-1"
-              >
-                {parseInline(trimmed)}
-              </div>
-            );
-          }
-
-          // Bullet list: lines starting with - or *
-          const lines = trimmed.split('\n');
-          const isBulletList = lines.every((line) => /^\s*[-*]\s+/.test(line));
-          if (isBulletList) {
-            return (
-              <ul key={`${index}-${pIdx}`} className="flex flex-col gap-1.5 my-1 pl-4 list-disc text-zinc-300">
-                {lines.map((line, lIdx) => (
-                  <li key={lIdx} className="text-xs leading-normal">
-                    {parseInline(line.replace(/^\s*[-*]\s+/, ''))}
-                  </li>
-                ))}
-              </ul>
-            );
-          }
-
-          // Numbered list: lines starting with 1. or 2.
-          const isNumberedList = lines.every((line) => /^\s*\d+\.\s+/.test(line));
-          if (isNumberedList) {
-            return (
-              <ol key={`${index}-${pIdx}`} className="flex flex-col gap-1.5 my-1 pl-4 list-decimal text-zinc-300">
-                {lines.map((line, lIdx) => (
-                  <li key={lIdx} className="text-xs leading-normal">
-                    {parseInline(line.replace(/^\s*\d+\.\s+/, ''))}
-                  </li>
-                ))}
-              </ol>
-            );
-          }
-
-          // Mixed lines with bullets
-          if (lines.some((l) => /^\s*[-*]\s+/.test(l))) {
-            return (
-              <div key={`${index}-${pIdx}`} className="flex flex-col gap-1.5">
-                {lines.map((line, lIdx) => {
-                  if (/^\s*[-*]\s+/.test(line)) {
-                    return (
-                      <div key={lIdx} className="flex items-start gap-2 pl-2 text-xs">
-                        <span className="text-zinc-500 flex-none mt-1">•</span>
-                        <span>{parseInline(line.replace(/^\s*[-*]\s+/, ''))}</span>
-                      </div>
-                    );
-                  }
-                  return (
-                    <p key={lIdx} className="text-xs leading-relaxed">
-                      {parseInline(line)}
-                    </p>
-                  );
-                })}
-              </div>
-            );
-          }
-
-          // Standard paragraph
-          return (
-            <p key={`${index}-${pIdx}`} className="text-xs leading-relaxed">
-              {parseInline(trimmed)}
-            </p>
-          );
+          return renderBlock(para.trim(), `${index}-${pIdx}`);
         });
       })}
     </div>

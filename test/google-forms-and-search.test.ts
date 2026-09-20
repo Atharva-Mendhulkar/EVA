@@ -98,12 +98,33 @@ describe('Google Forms Automation & Web Research Agents', () => {
     expect(cedarRead?.decision).toBe('ALLOW');
   });
 
-  it('synthesizes top AI internship intelligence for Bangalore queries', async () => {
+  it('synthesizes top AI internship intelligence for Bangalore queries without emojis', async () => {
     const res = await searchInternet('find me the best ai intern jobs in blr');
     expect(res.summary).toContain('Top AI & Machine Learning Internship Opportunities in Bangalore');
     expect(res.summary).toContain('Microsoft Research India');
     expect(res.summary).toContain('Google DeepMind');
     expect(res.results.length).toBeGreaterThan(0);
     expect(res.results.some((r) => r.sourceDomain.includes('careers.microsoft.com') || r.sourceDomain.includes('google.com'))).toBe(true);
+
+    // Verify zero emojis
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+    expect(emojiRegex.test(res.summary)).toBe(false);
+  });
+
+  it('synthesizes rich AI internship intelligence for Chennai queries with verified links and zero emojis', async () => {
+    const res = await searchInternet('find me ai internships in Chennai');
+    expect(res.summary).toContain('Top AI & Machine Learning Internship Opportunities in Chennai');
+    expect(res.summary).toContain('IIT Madras - RBCDSAI');
+    expect(res.summary).toContain('Zoho Corporation');
+    expect(res.summary).toContain('Freshworks');
+    expect(res.summary).toContain('PayPal India');
+    expect(res.results.length).toBeGreaterThanOrEqual(5);
+    expect(res.results.some((r) => r.sourceDomain.includes('rbcdsai.iitm.ac.in'))).toBe(true);
+    expect(res.results.some((r) => r.sourceDomain.includes('zohocorp.com'))).toBe(true);
+    expect(res.results.some((r) => r.sourceDomain.includes('freshworks.com'))).toBe(true);
+
+    // Verify zero emojis
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+    expect(emojiRegex.test(res.summary)).toBe(false);
   });
 });

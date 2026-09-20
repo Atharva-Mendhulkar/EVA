@@ -461,14 +461,14 @@ export class WorkflowStore {
     if (isConversational) {
       agentResponse = `Hello! I am **EVA** (*Evidence, Verification, and Authorization*), your autonomous administrative and operational agent.\n\nI bridge natural language requests with real, policy-governed execution. Unlike typical chatbots, I ground every field in verified documents from your personal vault, detect contradictory records with deterministic checks, and enforce Cedar zero-trust security policies before any consequential action is taken.\n\nHere are some verified operational workflows you can run right now:`;
       suggestions = [
-        { title: '💼 Internship Onboarding', prompt: "I'm starting an internship in Bangalore", template: 'internship_onboarding' },
-        { title: '💻 Developer Workstation', prompt: 'Order a developer workstation for my engineering role', template: 'hardware_procurement' },
-        { title: '🏥 Medical Reimbursement', prompt: 'File insurance reimbursement for my hospital bill', template: 'medical_reimbursement' },
-        { title: '🏦 Vendor Payout Bank Update', prompt: 'Update payout bank account for consulting invoices', template: 'vendor_payout_update' }
+        { title: 'Internship Onboarding', prompt: "I'm starting an internship in Bangalore", template: 'internship_onboarding' },
+        { title: 'Developer Workstation', prompt: 'Order a developer workstation for my engineering role', template: 'hardware_procurement' },
+        { title: 'Medical Reimbursement', prompt: 'File insurance reimbursement for my hospital bill', template: 'medical_reimbursement' },
+        { title: 'Vendor Payout Bank Update', prompt: 'Update payout bank account for consulting invoices', template: 'vendor_payout_update' }
       ];
     } else if (selectedTemplateKey === 'internship_onboarding') {
       agentResponse = conflictResult.conflicts.length > 0
-        ? `I have initiated your **Internship Onboarding** workflow for Bangalore.\n\nI extracted 7 evidence fields from your *Offer Letter* and *College NOC* stored in your Personal Vault.\n\n⚠️ **Contradiction Detected**: A start date mismatch was detected between your Offer Letter (**July 1, 2026**) and College NOC (**June 15, 2026**). In accordance with Cedar zero-trust security policy, execution is paused for your authoritative resolution.`
+        ? `I have initiated your **Internship Onboarding** workflow for Bangalore.\n\nI extracted 7 evidence fields from your *Offer Letter* and *College NOC* stored in your Personal Vault.\n\n**Contradiction Detected**: A start date mismatch was detected between your Offer Letter (**July 1, 2026**) and College NOC (**June 15, 2026**). In accordance with Cedar zero-trust security policy, execution is paused for your authoritative resolution.`
         : `I have initiated your **Internship Onboarding** workflow. All evidence fields from your vault have been reconciled cleanly. Preparing form population plan for Cedar policy evaluation.`;
     } else if (selectedTemplateKey === 'hardware_procurement') {
       agentResponse = `I have initiated your **Developer Hardware Procurement** request.\n\nParsed hardware specifications: **16-inch MacBook Pro M3 Max (64GB RAM, 1TB SSD)** against engineering department budget allowance and cost center **ENG-PROD-2026**.\n\nForm population plan generated and evaluated against Cedar equipment tier policies.`;
@@ -498,7 +498,7 @@ export class WorkflowStore {
           .map((f) => `- **${f.label}**: \`${f.value}\` *(from ${f.sourceDocument})*`)
           .join('\n');
 
-        agentResponse = `I have dynamically inspected and parsed the Google Form from your link:\n### **${parsedFormSchema.title}**\n*Endpoint: \`${parsedFormSchema.actionUrl}\`*\n\nDiscovered **${populatedFields.length} questions** and mapped evidence from your Personal Vault:\n\n${mappedBullets}\n\n🔒 **Cedar Zero-Trust Policy Evaluated**: Form fields populated in the sandbox. Consequential external submission is safely held awaiting your explicit human approval.`;
+        agentResponse = `I have dynamically inspected and parsed the Google Form from your link:\n### **${parsedFormSchema.title}**\n*Endpoint: \`${parsedFormSchema.actionUrl}\`*\n\nDiscovered **${populatedFields.length} questions** and mapped evidence from your Personal Vault:\n\n${mappedBullets}\n\n**Cedar Zero-Trust Policy Evaluated**: Form fields populated in the sandbox. Consequential external submission is safely held awaiting your explicit human approval.`;
       } else {
         const res = buildPopulationPlan(
           templateConfig.templateId,
@@ -518,7 +518,7 @@ export class WorkflowStore {
 - **Company Name**: \`Acme Cloud Systems\` *(doc_offer_03)*
 - **Commencement Date**: \`2026-10-01\` *(doc_offer_03)*
 
-🔒 **Cedar Zero-Trust Policy Evaluated**: Form population **ALLOWED**. The simulated browser sandbox has mapped all DOM selectors and populated your verified evidence. Consequential external submission is safely paused awaiting your review and approval.`;
+**Cedar Zero-Trust Policy Evaluated**: Form population **ALLOWED**. The simulated browser sandbox has mapped all DOM selectors and populated your verified evidence. Consequential external submission is safely paused awaiting your review and approval.`;
       }
 
       const formIdToUse = parsedFormSchema ? parsedFormSchema.formId : templateConfig.templateId;
@@ -645,26 +645,26 @@ export class WorkflowStore {
       if (isRepoQuery) {
         agentResponse = `I have located the official GitHub repository and source architecture for **EVA (Evidence Verification & Authorization)**:
 
-### 📦 Repository: [Atharva-Mendhulkar/EVA](https://github.com/Atharva-Mendhulkar/EVA)
+### Repository: [Atharva-Mendhulkar/EVA](https://github.com/Atharva-Mendhulkar/EVA)
 *Evidence Before Action · Autonomous Administrative AI Agent System*
 
-- 🌐 **GitHub Link**: https://github.com/Atharva-Mendhulkar/EVA
-- 🌿 **Branch**: \`main\`
-- 🛠️ **Tech Stack**: Next.js 16 (Turbopack), TypeScript, Cedar Zero-Trust Engine, AWS Bedrock Claude 3.5 Sonnet, AWS Step Functions & Lambda, Playwright Sandbox.
-- 🚀 **Live Deployments**:
+- **GitHub Link**: https://github.com/Atharva-Mendhulkar/EVA
+- **Branch**: \`main\`
+- **Tech Stack**: Next.js 16 (Turbopack), TypeScript, Cedar Zero-Trust Engine, AWS Bedrock Claude 3.5 Sonnet, AWS Step Functions & Lambda, Playwright Sandbox.
+- **Live Deployments**:
   - **Vercel Production**: [agenteva.vercel.app](https://agenteva.vercel.app)
   - **AWS Backend**: [k100udzhk6.execute-api.us-east-1.amazonaws.com](https://k100udzhk6.execute-api.us-east-1.amazonaws.com)
-- 🔒 **Key Architectural Guarantees**:
+- **Key Architectural Guarantees**:
   - **Zero-Hallucination**: Deterministic refusal canary fields.
   - **Cedar Policy Evaluation**: Fail-closed authorization boundary.
   - **Human Consent**: Single-use cryptographic approval nonces.
   - **Audit Integrity**: Append-only SHA-256 hash-chained ledger.`;
 
         suggestions = [
-          { title: '💼 Internship Onboarding', prompt: "I'm starting an internship in Bangalore", template: 'internship_onboarding' },
-          { title: '💻 Hardware Procurement', prompt: 'Order a developer workstation for my engineering role', template: 'hardware_procurement' },
-          { title: '🏥 Medical Reimbursement', prompt: 'File insurance reimbursement for my hospital bill', template: 'medical_reimbursement' },
-          { title: '🏦 Vendor Payout Update', prompt: 'Update payout bank account for consulting invoices', template: 'vendor_payout_update' }
+          { title: 'Internship Onboarding', prompt: "I'm starting an internship in Bangalore", template: 'internship_onboarding' },
+          { title: 'Hardware Procurement', prompt: 'Order a developer workstation for my engineering role', template: 'hardware_procurement' },
+          { title: 'Medical Reimbursement', prompt: 'File insurance reimbursement for my hospital bill', template: 'medical_reimbursement' },
+          { title: 'Vendor Payout Update', prompt: 'Update payout bank account for consulting invoices', template: 'vendor_payout_update' }
         ];
 
         populatedFields = [
@@ -990,7 +990,7 @@ export class WorkflowStore {
           .map((f) => `- **${f.label}**: \`${f.value}\` *(from ${f.sourceDocument})*`)
           .join('\n');
 
-        run.agentResponse = `I have dynamically fetched and parsed the live Google Form:\n### **${parsedSchema.title}**\n*Endpoint: \`${parsedSchema.actionUrl}\`*\n\nDiscovered **${run.formFields.length} form fields** and matched evidence from your Personal Vault:\n\n${mappedBullets}\n\n🔒 **Cedar Zero-Trust Policy Evaluated**: Form population **ALLOWED**. All DOM selectors mapped. Consequential submission is paused awaiting your explicit human consent.`;
+        run.agentResponse = `I have dynamically fetched and parsed the live Google Form:\n### **${parsedSchema.title}**\n*Endpoint: \`${parsedSchema.actionUrl}\`*\n\nDiscovered **${run.formFields.length} form fields** and matched evidence from your Personal Vault:\n\n${mappedBullets}\n\n**Cedar Zero-Trust Policy Evaluated**: Form population **ALLOWED**. All DOM selectors mapped. Consequential submission is paused awaiting your explicit human consent.`;
 
         appendAuditEvent(run.auditTrail, {
           eventId: `aud_${Date.now()}_dyn_gform`,
@@ -1293,7 +1293,7 @@ export class WorkflowStore {
     run.status = 'AWAITING_HUMAN_APPROVAL';
     run.awaitingAction = 'HUMAN_APPROVAL'; // NO activeTaskToken to client!
     run.latestExplanation = denyAudit.explanation;
-    run.agentResponse = `Conflict resolved: selected **${resolvedValue}** as authoritative for **${conflict.field}**. Cedar Policy evaluated **ALLOW** for form population. I have populated the **${templateConfig.targetSystem}** form fields.\n\n🔒 **Human Consent Gate Active**: Consequential external submission is safely paused awaiting your review and approval.`;
+    run.agentResponse = `Conflict resolved: selected **${resolvedValue}** as authoritative for **${conflict.field}**. Cedar Policy evaluated **ALLOW** for form population. I have populated the **${templateConfig.targetSystem}** form fields.\n\n**Human Consent Gate Active**: Consequential external submission is safely paused awaiting your review and approval.`;
     run.updatedAt = new Date().toISOString();
 
     this.workflows.set(runId, run);
