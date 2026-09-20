@@ -101,6 +101,10 @@ export class CedarEngine {
         return this.evaluateSubmitForm(decisionId, principal, resource, context, evaluatedAt);
       }
 
+      if (action === 'Action::"read_document"') {
+        return this.evaluateReadDocument(decisionId, principal, resource, context, evaluatedAt);
+      }
+
       // Default deny for unmapped action
       return {
         decisionId,
@@ -308,6 +312,43 @@ export class CedarEngine {
         from: 'true',
         to: 'false',
         outcomeWouldBecome: 'DENY'
+      },
+      evaluatedAt
+    };
+  }
+
+  private evaluateReadDocument(
+    decisionId: string,
+    principal: CedarPrincipal,
+    resource: CedarResource,
+    context: CedarContext,
+    evaluatedAt: string
+  ): CedarEvaluationResult {
+    const isAllowed = context.conflict_resolved !== false;
+    return {
+      decisionId,
+      principal,
+      action: 'Action::"read_document"',
+      resource,
+      decision: isAllowed ? 'ALLOW' : 'DENY',
+      reason: isAllowed
+        ? 'Cedar Policy 03 permitted: Document access within valid workflow scope.'
+        : 'Cedar Policy 03 forbidden: Document access requires resolved conflict.',
+      policySnippet: '// Policy ID: policy_03_read_document\npermit (principal, action == Action::"read_document", resource);',
+      policyId: 'policy_03_read_document',
+      conditions: [
+        {
+          name: 'workflow_scope_valid',
+          required: 'valid',
+          actual: 'valid',
+          result: isAllowed ? 'PASS' : 'FAIL'
+        }
+      ],
+      whatWouldChange: {
+        condition: 'workflow_scope_valid',
+        from: isAllowed ? 'valid' : 'invalid',
+        to: isAllowed ? 'invalid' : 'valid',
+        outcomeWouldBecome: isAllowed ? 'DENY' : 'ALLOW'
       },
       evaluatedAt
     };

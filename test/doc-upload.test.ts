@@ -79,4 +79,30 @@ describe('EVA Encrypted Document Ingestion & OCR Engine (PRD Section 7)', () => 
     expect(nameEv?.value).toBe('Atharva Mendhulkar');
     expect(nameEv?.sourceDocumentId).toBe(result.anonymousDocId);
   });
+
+  it('extracts text from OpenXML Office documents (.docx, .pptx, .xlsx)', () => {
+    const mockDocxContent = `PK\x03\x04[trash]<w:p><w:r><w:t>Full Legal Name: Atharva Mendhulkar</w:t></w:r><w:r><w:t>Work Location: Bangalore</w:t></w:r></w:p>`;
+    const buffer = Buffer.from(mockDocxContent, 'latin1');
+    const text = extractTextFromBuffer(buffer, 'Offer_Letter.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+
+    expect(text).toContain('Full Legal Name: Atharva Mendhulkar');
+    expect(text).toContain('Work Location: Bangalore');
+  });
+
+  it('extracts text from PowerPoint presentations (.pptx)', () => {
+    const mockPptxContent = `PK\x03\x04...<p:sp><p:txBody><a:p><a:r><a:t>Candidate Onboarding Overview</a:t></a:r><a:r><a:t>Work Location: Bangalore</a:t></a:r></a:p></p:txBody></p:sp>`;
+    const buffer = Buffer.from(mockPptxContent, 'latin1');
+    const text = extractTextFromBuffer(buffer, 'Presentation.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+
+    expect(text).toContain('Candidate Onboarding Overview');
+    expect(text).toContain('Work Location: Bangalore');
+  });
+
+  it('processes image formats (JPG, PNG) with synthetic OCR grounding', () => {
+    const mockPng = Buffer.from('\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR...Candidate Name: Atharva Mendhulkar...IEND\xaeB`\x82', 'latin1');
+    const text = extractTextFromBuffer(mockPng, 'badge_scan.png', 'image/png');
+
+    expect(text).toContain('badge_scan.png');
+  });
 });
+

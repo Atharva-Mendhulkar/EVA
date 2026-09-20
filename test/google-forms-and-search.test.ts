@@ -75,4 +75,35 @@ describe('Google Forms Automation & Web Research Agents', () => {
     expect(res.results[0].url).toBeDefined();
     expect(res.results[0].sourceDomain).toBeDefined();
   });
+
+  it('routes "find me the best ai intern jobs in blr" to web search without fake demo conflict', () => {
+    const prompt = 'find me the best ai intern jobs in blr';
+    expect(classifyIntent(prompt)).toBe('web_search_research');
+
+    const store = new WorkflowStore();
+    const wf = store.createWorkflow(prompt);
+
+    expect(wf.template).toBe('web_search_research');
+    expect(wf.status).toBe('COMPLETED');
+    expect(wf.stepIndex).toBe(8);
+    expect(wf.currentStep).toBe('Completed · HTTP 200 OK');
+    expect(wf.conflicts).toHaveLength(0);
+    expect(wf.awaitingAction).toBeNull();
+    expect(wf.plan).toHaveLength(8);
+    expect(wf.plan.every((s) => s.status === 'COMPLETED')).toBe(true);
+
+    // Verify Cedar authorization is present for read operation
+    const cedarRead = wf.cedarDecisions.find((d) => d.action === 'Action::"read_document"');
+    expect(cedarRead).toBeDefined();
+    expect(cedarRead?.decision).toBe('ALLOW');
+  });
+
+  it('synthesizes top AI internship intelligence for Bangalore queries', async () => {
+    const res = await searchInternet('find me the best ai intern jobs in blr');
+    expect(res.summary).toContain('Top AI & Machine Learning Internship Opportunities in Bangalore');
+    expect(res.summary).toContain('Microsoft Research India');
+    expect(res.summary).toContain('Google DeepMind');
+    expect(res.results.length).toBeGreaterThan(0);
+    expect(res.results.some((r) => r.sourceDomain.includes('careers.microsoft.com') || r.sourceDomain.includes('google.com'))).toBe(true);
+  });
 });

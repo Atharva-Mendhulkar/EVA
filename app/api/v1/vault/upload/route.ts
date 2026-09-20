@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
       document: {
         ...newDoc,
         id: newDoc.documentId,
+        title: newDoc.name,
+        name: newDoc.name,
+        rawText: result.extractedText,
         sha256Fingerprint: result.sha256Fingerprint
       },
       extractedEvidence: result.extractedEvidence,

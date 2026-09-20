@@ -294,11 +294,30 @@ export default function Page() {
         enableSearch ||
         templateId === 'web_search_research' ||
         lower.startsWith('search') ||
+        lower.startsWith('find') ||
+        lower.startsWith('look up') ||
+        lower.startsWith('what') ||
+        lower.startsWith('who') ||
+        lower.startsWith('how') ||
+        lower.startsWith('where') ||
+        lower.startsWith('why') ||
+        lower.startsWith('when') ||
+        lower.startsWith('tell me') ||
+        lower.startsWith('show me') ||
+        lower.startsWith('jobs') ||
         lower.includes('search web') ||
         lower.includes('search internet') ||
         lower.includes('search the web') ||
         lower.includes('google search') ||
-        lower.includes('look up online');
+        lower.includes('look up online') ||
+        lower.includes('jobs in') ||
+        lower.includes('intern jobs') ||
+        lower.includes('ai intern') ||
+        lower.includes('best ai') ||
+        lower.includes('hiring') ||
+        lower.includes('internship in') ||
+        lower.includes('research') ||
+        lower.endsWith('?');
 
       let searchSources: any[] | undefined = undefined;
       let searchSummary: string | undefined = undefined;
@@ -406,12 +425,31 @@ export default function Page() {
     const isSearchIntent =
       enableSearch ||
       lower.startsWith('search') ||
+      lower.startsWith('find') ||
+      lower.startsWith('look up') ||
+      lower.startsWith('what') ||
+      lower.startsWith('who') ||
+      lower.startsWith('how') ||
+      lower.startsWith('where') ||
+      lower.startsWith('why') ||
+      lower.startsWith('when') ||
+      lower.startsWith('tell me') ||
+      lower.startsWith('show me') ||
+      lower.startsWith('jobs') ||
       lower.includes('search web') ||
-      lower.includes('search the web') ||
       lower.includes('search internet') ||
+      lower.includes('search the web') ||
       lower.includes('google search') ||
       lower.includes('look up online') ||
-      lower.includes('find online');
+      lower.includes('find online') ||
+      lower.includes('jobs in') ||
+      lower.includes('intern jobs') ||
+      lower.includes('ai intern') ||
+      lower.includes('best ai') ||
+      lower.includes('hiring') ||
+      lower.includes('internship in') ||
+      lower.includes('research') ||
+      lower.endsWith('?');
 
     const isGoogleFormsIntent =
       enableFormFill ||
@@ -737,7 +775,7 @@ export default function Page() {
                   ref={landingFileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.txt,.md,.json,.png,.jpg,.jpeg"
+                  accept="image/*,application/pdf,.pdf,.doc,.docx,.odt,.rtf,.pages,.ppt,.pptx,.odp,.key,.xls,.xlsx,.csv,.tsv,.txt,.md,.json,.xml,.yaml,.yml,.html,.htm,.log"
                   className="hidden"
                   onChange={handleChatFileUpload}
                 />
@@ -1166,7 +1204,11 @@ export default function Page() {
                 ) : (
                   <>
                     {/* Operation Title / Target Header */}
-                    {workflow && workflow.template !== 'conversational' && (
+                    {workflow &&
+                      workflow.template !== 'conversational' &&
+                      workflow.template !== 'web_search_research' &&
+                      workflow.template !== 'custom_operation' &&
+                      workflow.template !== 'internship_onboarding' && (
                       <div className="mb-4 flex items-center justify-between pb-3 border-b border-white/5">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono text-white/40 uppercase tracking-wider">
@@ -1364,7 +1406,10 @@ export default function Page() {
                     {latestCedar && <CedarInspector decision={latestCedar} />}
 
                     {/* Causal Explainability */}
-                    {workflow?.latestExplanation && workflow.template !== 'conversational' && (
+                    {workflow?.latestExplanation &&
+                      workflow.template !== 'conversational' &&
+                      workflow.template !== 'web_search_research' &&
+                      workflow.template !== 'custom_operation' && (
                       <DecisionExplanationCard
                         explanation={workflow.latestExplanation}
                         onViewEvidence={handleInspectEvidence}
@@ -1444,7 +1489,7 @@ export default function Page() {
                     ref={followUpFileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.txt,.md,.json,.png,.jpg,.jpeg"
+                    accept="image/*,application/pdf,.pdf,.doc,.docx,.odt,.rtf,.pages,.ppt,.pptx,.odp,.key,.xls,.xlsx,.csv,.tsv,.txt,.md,.json,.xml,.yaml,.yml,.html,.htm,.log"
                     className="hidden"
                     onChange={handleChatFileUpload}
                   />

@@ -155,24 +155,26 @@ describe('EVA Core Logic & Verification Suite', () => {
 
   // 7. Cedar engine failure: -> fail-closed DENY
   it('7. Cedar runtime failure strictly fails closed to default DENY', () => {
-    cedarEngine.setSimulateFailure(true);
+    try {
+      cedarEngine.setSimulateFailure(true);
 
-    const decision = cedarEngine.evaluate(
-      'EvaAgent::"form_execution"',
-      'Action::"submit_form"',
-      'Form::"internship_onboarding"',
-      {
-        conflict_resolved: true,
-        evidence_confidence: 0.98,
-        human_approved: true,
-        workflow_scope: 'internship'
-      }
-    );
+      const decision = cedarEngine.evaluate(
+        'EvaAgent::"form_execution"',
+        'Action::"submit_form"',
+        'Form::"internship_onboarding"',
+        {
+          conflict_resolved: true,
+          evidence_confidence: 0.98,
+          human_approved: true,
+          workflow_scope: 'internship'
+        }
+      );
 
-    cedarEngine.setSimulateFailure(false); // Reset
-
-    expect(decision.decision).toBe('DENY');
-    expect(decision.reason).toContain('fail-closed: default DENY');
+      expect(decision.decision).toBe('DENY');
+      expect(decision.reason).toContain('fail-closed: default DENY');
+    } finally {
+      cedarEngine.setSimulateFailure(false);
+    }
   });
 
   // 8. Missing sensitive field: -> null / refusal (no hallucination)
@@ -356,5 +358,19 @@ describe('EVA Core Logic & Verification Suite', () => {
     const approved = store.approveSubmission(wf.workflowRunId, 'APPROVE', undefined, resolved.approvalChallenge?.nonce);
     expect(approved.agentResponse).toContain('Submission to');
     expect(approved.agentResponse).toContain('completed successfully');
+  });
+
+  // 19. Repository discovery query ("find me this repo") completes cleanly with full repo links and plan
+  it('19. Repository discovery query ("find me this repo") completes cleanly with full repo links and plan', () => {
+    const repoWf = store.createWorkflow('find me this repo');
+    expect(repoWf.status).toBe('COMPLETED');
+    expect(repoWf.stepIndex).toBe(8);
+    expect(repoWf.agentResponse).toContain('Atharva-Mendhulkar/EVA');
+    expect(repoWf.agentResponse).toContain('https://github.com/Atharva-Mendhulkar/EVA');
+    expect(repoWf.formFields.length).toBeGreaterThanOrEqual(4);
+    expect(repoWf.formFields.some((f) => f.value.includes('EVA'))).toBe(true);
+    expect(repoWf.plan.every((p) => p.status === 'COMPLETED')).toBe(true);
+    expect(repoWf.cedarDecisions.length).toBeGreaterThanOrEqual(1);
+    expect(repoWf.cedarDecisions[0].decision).toBe('ALLOW');
   });
 });

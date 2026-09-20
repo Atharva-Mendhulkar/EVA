@@ -24,8 +24,11 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json().catch(() => ({}));
-    const { intent, template, userId, attachedDocumentIds } = body;
-    let workflow = workflowStore.createWorkflow(intent, template, userId, undefined, 0, attachedDocumentIds);
+    const { intent, template, userId, attachedDocumentIds, enableSearch, enableFormFill } = body;
+    const resolvedTemplate =
+      template ||
+      (enableFormFill ? 'google_forms_fill' : (enableSearch ? 'web_search_research' : undefined));
+    let workflow = workflowStore.createWorkflow(intent, resolvedTemplate, userId, undefined, 0, attachedDocumentIds);
 
     // If a Google Form URL is present, dynamically ingest live public schema
     const urls = extractUrls(intent || '');

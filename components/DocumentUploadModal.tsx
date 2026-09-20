@@ -68,9 +68,9 @@ export function DocumentUploadModal({ isOpen, onClose, onUploadSuccess }: Docume
       const data = await res.json();
       setOcrResult({
         docId: data.document.id,
-        filename: data.document.title,
+        filename: data.document.name || data.document.title || 'Document',
         sha256: data.document.sha256Fingerprint,
-        extractedText: data.document.rawText,
+        extractedText: data.document.rawText || '',
         evidence: data.extractedEvidence || [],
         message: data.message
       });
@@ -139,7 +139,7 @@ export function DocumentUploadModal({ isOpen, onClose, onUploadSuccess }: Docume
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept=".pdf,.txt,.md,.json,.png,.jpg,.jpeg"
+                    accept="image/*,application/pdf,.pdf,.doc,.docx,.odt,.rtf,.pages,.ppt,.pptx,.odp,.key,.xls,.xlsx,.csv,.tsv,.txt,.md,.json,.xml,.yaml,.yml,.html,.htm,.log"
                     onChange={handleFileChange}
                   />
 
@@ -160,7 +160,7 @@ export function DocumentUploadModal({ isOpen, onClose, onUploadSuccess }: Docume
                         Drag & drop a document, or <span className="underline">browse</span>
                       </p>
                       <p className="text-[11px] text-white/40 mt-1 font-mono">
-                        PDF, Images (PNG, JPG), Markdown, or Plain Text
+                        PDF, Images (JPG, PNG, WebP), Docs (DOCX, PPTX, XLSX), or Plain Text
                       </p>
                     </div>
                   )}

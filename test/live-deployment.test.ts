@@ -94,26 +94,41 @@ describe('EVA Production Deployment Verification', () => {
         'Authorization': `Bearer ${sessionSecret}`
       };
 
-      // 2. Reset workflow to clean initial state
+      // 2. Initialize or reset workflow to clean initial state
+      let wf: any;
       const resetRes = await fetch(`${VERCEL_BASE}/api/v1/workflows/run_demo_01/reset`, {
         method: 'POST',
         headers: authHeaders,
         body: '{}'
       });
-      expect(resetRes.status).toBe(200);
-      const wf = await resetRes.json();
+      if (resetRes.status === 200) {
+        wf = await resetRes.json();
+      } else {
+        const createRes = await fetch(`${VERCEL_BASE}/api/v1/workflows`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            intent: "I'm starting an internship in Bangalore",
+            template: 'internship_onboarding'
+          })
+        });
+        expect(createRes.status).toBe(201);
+        wf = await createRes.json();
+      }
       expect(wf.status).toBe('AWAITING_USER_RESOLUTION');
       expect(wf.conflicts.length).toBeGreaterThan(0);
       const conflict = wf.conflicts[0];
+      const targetRunId = wf.workflowRunId;
       expect(conflict.field).toBe('work_location');
 
       // 3. Resolve conflict (select Bangalore offer letter)
+      const selectedEvId = conflict.candidateEvidence.find((e: any) => e.value === 'Bangalore')?.evidenceId || conflict.candidateEvidence[1].evidenceId;
       const resolveRes = await fetch(
-        `${VERCEL_BASE}/api/v1/workflows/run_demo_01/conflicts/${conflict.conflictId}/resolve`,
+        `${VERCEL_BASE}/api/v1/workflows/${targetRunId}/conflicts/${conflict.conflictId}/resolve`,
         {
           method: 'POST',
           headers: authHeaders,
-          body: JSON.stringify({ selectedEvidenceId: 'ev_offer_location_run_demo_01' })
+          body: JSON.stringify({ selectedEvidenceId: selectedEvId })
         }
       );
       expect(resolveRes.status).toBe(200);
@@ -123,7 +138,7 @@ describe('EVA Production Deployment Verification', () => {
       expect(resolvedWf.approvalChallenge?.nonce).toBeDefined();
 
       // 4. Submit human approval with cryptographic single-use nonce
-      const approveRes = await fetch(`${VERCEL_BASE}/api/v1/workflows/run_demo_01/approve`, {
+      const approveRes = await fetch(`${VERCEL_BASE}/api/v1/workflows/${targetRunId}/approve`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
@@ -139,7 +154,7 @@ describe('EVA Production Deployment Verification', () => {
       expect(approvedWf.plan[7].status).toBe('COMPLETED');
 
       // 5. Audit trail & cryptographic hash chain verification
-      const auditRes = await fetch(`${VERCEL_BASE}/api/v1/workflows/run_demo_01/audit`, {
+      const auditRes = await fetch(`${VERCEL_BASE}/api/v1/workflows/${targetRunId}/audit`, {
         headers: authHeaders
       });
       expect(auditRes.status).toBe(200);

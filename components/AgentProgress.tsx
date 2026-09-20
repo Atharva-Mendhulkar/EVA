@@ -115,25 +115,25 @@ export function AgentProgress({
             <Sparkles className="w-4 h-4 text-zinc-300 flex-none" />
           )}
 
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="badge-minimal text-[10px]">
-                PHASE {currentPhaseNumber} OF 8
-              </span>
-              <span className="thinking-title text-sm font-medium text-zinc-100">
-                {currentPhaseTitle}
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="badge-minimal text-[10px]">
+                  {isCompleted ? 'ALL 8 PHASES COMPLETE' : `PHASE ${currentPhaseNumber} OF 8`}
+                </span>
+                <span className="thinking-title text-sm font-medium text-zinc-100">
+                  {isCompleted ? 'All 8 Phases Complete & Verified' : currentPhaseTitle}
+                </span>
+              </div>
+              <span className="text-[11px] text-zinc-500 font-mono mt-0.5">
+                {isCompleted
+                  ? 'All 8 phases completed · Append-only audit trail verified'
+                  : isConflict
+                  ? 'Execution paused at Step Functions token (.waitForTaskToken)'
+                  : isAwaitingApproval
+                  ? 'Consequential submission gate · Awaiting explicit human consent'
+                  : 'AWS Serverless State Machine Executing...'}
               </span>
             </div>
-            <span className="text-[11px] text-zinc-500 font-mono mt-0.5">
-              {isCompleted
-                ? 'All 8 phases completed · Append-only audit trail verified'
-                : isConflict
-                ? 'Execution paused at Step Functions token (.waitForTaskToken)'
-                : isAwaitingApproval
-                ? 'Consequential submission gate · Awaiting explicit human consent'
-                : 'AWS Serverless State Machine Executing...'}
-            </span>
-          </div>
         </button>
 
         {/* View Mode Toggle Pill & Expand Chevron */}
@@ -184,7 +184,9 @@ export function AgentProgress({
                   
                   // Compute dynamic status based on workflow state
                   let stepStatus: 'COMPLETED' | 'IN_PROGRESS' | 'ATTENTION' | 'PENDING' = 'PENDING';
-                  if (phaseDef.stepId < currentPhaseNumber) {
+                  if (isCompleted || planStep?.status === 'COMPLETED') {
+                    stepStatus = 'COMPLETED';
+                  } else if (phaseDef.stepId < currentPhaseNumber) {
                     stepStatus = 'COMPLETED';
                   } else if (phaseDef.stepId === currentPhaseNumber) {
                     stepStatus = isConflict || isAwaitingApproval ? 'ATTENTION' : 'IN_PROGRESS';
