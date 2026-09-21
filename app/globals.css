@@ -997,7 +997,7 @@ button, textarea, input {
   pointer-events: none;
   display: flex;
   justify-content: center;
-  z-index: 30;
+  z-index: 55;
 }
 
 .bottom-docked-capsule {

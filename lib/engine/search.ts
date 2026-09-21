@@ -350,6 +350,86 @@ Here are the highest-rated AI research labs, enterprise technology centers, and 
 **Next Steps with EVA**:
 If you have an application link (e.g. a Google Form or company intake portal), simply paste the URL here. EVA will autonomously parse the schema, populate your verified profile from your Personal Vault, and request your final sign-off before submission.`;
     }
+  } else if (isJobQuery && (isBangalore || isChennai)) {
+    // Job/internship query with a city but no AI keyword — still serve city-specific results
+    results.length = 0;
+
+    if (isBangalore) {
+      results.push(
+        {
+          title: 'LinkedIn Jobs: Internships in Bengaluru',
+          url: 'https://www.linkedin.com/jobs/search/?keywords=Intern&location=Bengaluru%2C%20Karnataka%2C%20India',
+          snippet: 'Live aggregate listing of active internship openings across all domains in Bangalore tech hubs, startups, and enterprise companies.',
+          sourceDomain: 'linkedin.com'
+        },
+        {
+          title: 'Internshala: Internships in Bangalore',
+          url: 'https://internshala.com/internships/internship-in-bangalore/',
+          snippet: 'Curated student internships across engineering, marketing, design, data science, and operations in Bengaluru with stipends up to Rs 40,000/month.',
+          sourceDomain: 'internshala.com'
+        },
+        {
+          title: 'Wellfound (AngelList): Bangalore Startup Internships',
+          url: 'https://wellfound.com/location/bangalore',
+          snippet: 'Connect directly with funded startup founders hiring interns across product, engineering, growth, and AI in Bengaluru.',
+          sourceDomain: 'wellfound.com'
+        },
+        {
+          title: 'Google Careers - Bengaluru Internships',
+          url: 'https://careers.google.com/jobs/results/?location=Bengaluru%2C%20Karnataka%2C%20India&q=intern',
+          snippet: 'Google Bangalore Campus hires interns across SWE, STEP, UX Research, and Business roles.',
+          sourceDomain: 'careers.google.com'
+        },
+        {
+          title: 'Microsoft Careers - Bengaluru Internships',
+          url: 'https://careers.microsoft.com/v2/global/en/locations/bangalore.html',
+          snippet: 'Microsoft India Development Center hires interns across engineering, research, PM, and design.',
+          sourceDomain: 'careers.microsoft.com'
+        }
+      );
+
+      summary = `### Best Internship Opportunities in Bangalore (BLR)
+
+Here are the top verified portals and companies actively hiring interns in Bengaluru:
+
+---
+
+#### 1. Aggregated Job Portals
+
+- **[LinkedIn Jobs: Internships in Bengaluru](https://www.linkedin.com/jobs/search/?keywords=Intern&location=Bengaluru%2C%20Karnataka%2C%20India)** — Filter by "Past Week" for live active listings across all domains.
+- **[Internshala: Bangalore Internships](https://internshala.com/internships/internship-in-bangalore/)** — Curated student internships with stipends up to Rs 40,000/month.
+- **[Wellfound (AngelList): Bangalore Startups](https://wellfound.com/location/bangalore)** — Direct access to startup founders and engineering leads hiring interns.
+
+#### 2. Top Companies Hiring Interns in BLR
+
+1. **[Google](https://careers.google.com/jobs/results/?location=Bengaluru%2C%20Karnataka%2C%20India&q=intern)** — SWE, STEP, UX, and Business internships.
+2. **[Microsoft](https://careers.microsoft.com/v2/global/en/locations/bangalore.html)** — Engineering, Research, and PM internships.
+3. **[Adobe](https://www.adobe.com/careers.html)** — Research, Design, and Engineering internships.
+4. **[NVIDIA](https://www.nvidia.com/en-us/about-nvidia/careers/)** — Deep Learning and Systems Engineering.
+5. **Flipkart, Swiggy, Razorpay, CRED, Zerodha** — Product, Growth, and Engineering roles across Bengaluru's top unicorns.
+
+---
+
+**Tip**: Add "AI", "data science", "marketing", or "design" to narrow results to a specific domain. Or paste an application link and EVA will auto-fill it from your vault.`;
+    } else {
+      // Chennai fallback
+      results.push(
+        {
+          title: 'LinkedIn Jobs: Internships in Chennai',
+          url: 'https://www.linkedin.com/jobs/search/?keywords=Intern&location=Chennai%2C%20Tamil%20Nadu%2C%20India',
+          snippet: 'Live aggregate listing of active internships across all domains in Chennai.',
+          sourceDomain: 'linkedin.com'
+        },
+        {
+          title: 'Internshala: Internships in Chennai',
+          url: 'https://internshala.com/internships/internship-in-chennai/',
+          snippet: 'Curated student internships across engineering, marketing, and operations in Chennai.',
+          sourceDomain: 'internshala.com'
+        }
+      );
+
+      summary = `### Best Internship Opportunities in Chennai\n\n- **[LinkedIn Jobs: Chennai Internships](https://www.linkedin.com/jobs/search/?keywords=Intern&location=Chennai%2C%20Tamil%20Nadu%2C%20India)** — Live listings across all domains.\n- **[Internshala: Chennai](https://internshala.com/internships/internship-in-chennai/)** — Curated student internships.\n\n**Tip**: Add "AI", "data science", "marketing", or "design" to narrow results.`;
+    }
   } else if (results.length > 0) {
     summary = `Found ${results.length} verified web sources for **"${cleanQuery}"**:\n\n` +
       results.map((r, i) => `${i + 1}. **[${r.title}](${r.url})** (${r.sourceDomain}):\n   ${r.snippet}`).join('\n\n');
