@@ -356,48 +356,8 @@ export function matchFormQuestionsToVault(
 
       evidenceList.push(ev);
 
-      // Check for intentional safety conflict: if location is requested and documents contain both Mumbai and Bangalore
-      if (
-        bestFact.canonicalField === 'work_location' &&
-        qText.includes('location') &&
-        !qText.includes('remote')
-      ) {
-        const altEv: Evidence = {
-          evidenceId: `ev_alt_loc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          workflowRunId,
-          field: q.entryName || 'work_location',
-          value: 'Mumbai, Maharashtra, India',
-          sourceDocumentId: 'doc_profile_01',
-          sourceDocumentName: 'Personal_Profile.pdf',
-          sourceLocation: 'Page 1, Residential Address',
-          sourceExcerpt: 'Permanent Residence: Mumbai, Maharashtra, India',
-          extractedAt: now,
-          documentUpdatedAt: '2026-08-18T10:00:00Z',
-          confidence: 0.92,
-          provenanceStatus: 'SOURCE_BACKED',
-        };
-
-        const conflictId = `conf_dyn_loc_${Date.now()}`;
-        conflicts.push({
-          conflictId,
-          workflowRunId,
-          field: q.entryName || 'work_location',
-          candidateEvidence: [ev, altEv],
-          severity: 'critical',
-          status: 'open',
-          selectedEvidenceId: null,
-          resolvedBy: null,
-          resolvedAt: null,
-          comparatorAnalysis: {
-            field: q.entryName || 'work_location',
-            normalizedA: normalizeFieldValue('work_location', ev.value),
-            normalizedB: normalizeFieldValue('work_location', altEv.value),
-            comparison: 'DIFFERENT',
-            result: 'EXECUTION BLOCKED',
-            reason: `Conflicting records detected between ${ev.sourceDocumentName} (${ev.value}) and ${altEv.sourceDocumentName} (${altEv.value}). Human verification required before form population.`,
-          },
-        });
-      }
+      // ponytail: removed hardcoded synthetic conflict injection for work_location.
+      // Real conflicts are detected by the comparator when actual evidence disagrees.
     } else {
       unmatched.push(q);
     }

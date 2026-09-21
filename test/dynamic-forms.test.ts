@@ -121,38 +121,41 @@ describe('Dynamic Form Capabilities & Live Google Forms Engine', () => {
     expect(gitEv).toBeDefined();
     expect(gitEv?.value).toBe('https://github.com/Atharva-Mendhulkar');
 
-    // Location contradiction should be caught and flagged as conflict
-    expect(matchResult.conflicts).toHaveLength(1);
-    expect(matchResult.conflicts[0].field).toBe('entry.105');
-    expect(matchResult.conflicts[0].candidateEvidence).toHaveLength(2);
+    // No synthetic conflicts — real conflicts only arise from actual evidence disagreements
+    expect(matchResult.conflicts).toHaveLength(0);
   });
 
   // 5. Dynamic Google Form Workflow Creation from prompt link
-  it('5. Creates dynamic workflow when user sends a Google Form link', () => {
+  it('5. Creates dynamic workflow when user sends a Google Form link', async () => {
     const userPrompt = 'Here is the form: https://docs.google.com/forms/d/e/1FAIpQLScX9_SampleForm/viewform please fill it on my behalf';
     const wf = store.createWorkflow(userPrompt);
 
     expect(wf.workflowRunId).toBeDefined();
     expect(wf.parsedFormSchema).toBeDefined();
     expect(wf.parsedFormSchema?.isGoogleForm).toBe(true);
-    expect(wf.formFields.length).toBeGreaterThan(0);
+
+    // createWorkflow sets up placeholder; ingestGoogleForm populates real fields
+    const ingested = await store.ingestGoogleForm(wf.workflowRunId, 'https://docs.google.com/forms/d/e/1FAIpQLScX9_SampleForm/viewform');
+    expect(ingested.formFields.length).toBeGreaterThan(0);
 
     // Verify formFields contain dynamic entry names
-    const hasEntryFields = wf.formFields.some((f) => f.entryName?.startsWith('entry.'));
+    const hasEntryFields = ingested.formFields.some((f) => f.entryName?.startsWith('entry.'));
     expect(hasEntryFields).toBe(true);
 
     // Has Cedar approval challenge
-    expect(wf.approvalChallenge).toBeDefined();
-    expect(wf.approvalChallenge?.status).toBe('pending');
+    expect(ingested.approvalChallenge).toBeDefined();
+    expect(ingested.approvalChallenge?.status).toBe('pending');
   });
 
   // 6. Approval and submission of dynamic form
-  it('6. Approves and executes dynamic Google Form submission', () => {
+  it('6. Approves and executes dynamic Google Form submission', async () => {
     const userPrompt = 'https://docs.google.com/forms/d/e/1FAIpQLScX9_SampleForm/viewform fill form';
     const wf = store.createWorkflow(userPrompt);
 
+    // Populate real form fields via ingestGoogleForm
+    let currentWf = await store.ingestGoogleForm(wf.workflowRunId, 'https://docs.google.com/forms/d/e/1FAIpQLScX9_SampleForm/viewform');
+
     // If there is a location conflict, resolve it first
-    let currentWf = wf;
     if (currentWf.status === 'AWAITING_USER_RESOLUTION' && currentWf.conflicts.length > 0) {
       const conf = currentWf.conflicts[0];
       currentWf = store.resolveConflict(

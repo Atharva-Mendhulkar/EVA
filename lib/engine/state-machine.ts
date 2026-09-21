@@ -162,7 +162,7 @@ export function classifyIntent(intentText: string): string {
 export class WorkflowStore {
   private workflows = new Map<string, WorkflowRun>();
   private serverTokens = new Map<string, ServerTaskToken>();
-  private activeRunIdBySession: string | null = null;
+  private activeRunIdBySession = new Map<string, string>(); // ponytail: was single string, keyed by sessionId now
 
   constructor() {
     // Clean boot: zero pre-seeded workflows by default!
@@ -179,7 +179,7 @@ export class WorkflowStore {
     for (const seed of seeds) {
       this.createWorkflow(seed.intent, seed.template, 'usr_eva_admin', seed.id);
     }
-    this.activeRunIdBySession = 'run_demo_01';
+    this.activeRunIdBySession.set('usr_eva_admin', 'run_demo_01');
   }
 
   public createWorkflow(
@@ -188,7 +188,8 @@ export class WorkflowStore {
     userIdentifier?: string,
     customRunId?: string,
     timeOffsetSec: number = 0,
-    attachedDocumentIds?: string[]
+    attachedDocumentIds?: string[],
+    sessionId?: string
   ): WorkflowRun {
     const activeIntent = intentText?.trim() || (templateId && TEMPLATES[templateId]?.defaultPrompt) || 'General Administrative Request';
     const extractedUrls = extractUrls(activeIntent);
@@ -204,20 +205,13 @@ export class WorkflowStore {
     if (isDynamicForm && targetFormUrl) {
       const isGForm = isGoogleFormUrl(targetFormUrl);
       const isMsForm = targetFormUrl.includes('forms.office.com') || targetFormUrl.includes('microsoft') || targetFormUrl.includes('outlook');
+      // ponytail: no fake entry IDs here. ingestGoogleForm (called by the route) fetches real ones.
       parsedFormSchema = {
         formId: `${isGForm ? 'gform' : isMsForm ? 'msform' : 'webform'}_${Buffer.from(targetFormUrl).toString('base64url').slice(0, 16)}`,
         title: isGForm ? 'Google Form (Online Response)' : isMsForm ? 'Microsoft Forms (Outlook / 365)' : 'Web Application Form',
         description: `Targeting live web form at ${targetFormUrl}`,
         actionUrl: isGForm ? targetFormUrl.replace(/\/viewform.*$/, '/formResponse') : targetFormUrl,
-        questions: [
-          { id: 'entry.1000001', title: 'Full Name', type: 'text', entryName: 'entry.1000001', required: true },
-          { id: 'entry.1000002', title: 'Email Address', type: 'text', entryName: 'entry.1000002', required: true },
-          { id: 'entry.1000003', title: 'Organization / University', type: 'text', entryName: 'entry.1000003', required: false },
-          { id: 'entry.1000004', title: 'Position / Role', type: 'text', entryName: 'entry.1000004', required: false },
-          { id: 'entry.1000005', title: 'Work Location', type: 'text', entryName: 'entry.1000005', required: false },
-          { id: 'entry.1000006', title: 'Commencement Date', type: 'text', entryName: 'entry.1000006', required: false },
-          { id: 'entry.1000007', title: 'Notes & Application Details', type: 'textarea', entryName: 'entry.1000007', required: false },
-        ],
+        questions: [],
         isGoogleForm: isGForm,
         formType: isGForm ? 'google_forms' : isMsForm ? 'microsoft_forms' : 'web_form',
         rawUrl: targetFormUrl,
@@ -850,6 +844,7 @@ export class WorkflowStore {
 
     const initialRun: WorkflowRun = {
       workflowRunId: runId,
+      sessionId,
       userId: activeUserId,
       intent: activeIntent,
       template: templateConfig.templateId,
@@ -920,7 +915,8 @@ export class WorkflowStore {
     };
 
     this.workflows.set(runId, initialRun);
-    this.activeRunIdBySession = runId;
+    const scopeKey = sessionId || activeUserId;
+    this.activeRunIdBySession.set(scopeKey, runId);
     return initialRun;
   }
 
@@ -1040,15 +1036,22 @@ export class WorkflowStore {
     return run;
   }
 
-  public getActiveWorkflow(): WorkflowRun | null {
-    if (!this.activeRunIdBySession) return null;
-    return this.workflows.get(this.activeRunIdBySession) || null;
+  public getActiveWorkflow(sessionId?: string): WorkflowRun | null {
+    // ponytail: scoped lookup first, falls back to any entry for test compat
+    const key = sessionId || '';
+    let runId = this.activeRunIdBySession.get(key);
+    if (!runId && !sessionId && this.activeRunIdBySession.size > 0) {
+      runId = Array.from(this.activeRunIdBySession.values()).pop();
+    }
+    if (!runId) return null;
+    return this.workflows.get(runId) || null;
   }
 
-  public setActiveWorkflow(runId: string): WorkflowRun {
+  public setActiveWorkflow(runId: string, sessionId?: string): WorkflowRun {
     const run = this.workflows.get(runId);
     if (!run) throw new Error(`Workflow run ${runId} not found.`);
-    this.activeRunIdBySession = runId;
+    const key = sessionId || '';
+    this.activeRunIdBySession.set(key, runId);
     return run;
   }
 
